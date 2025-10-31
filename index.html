@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#1a202c" />
+    <title>MST - Martyho Solar Tracker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="manifest" href="/manifest.json" />
+    <style>
+      :root, [data-theme="stellar"] {
+        --bg-gradient: linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
+        --color-primary: #8a2be2;
+        --color-primary-hover: #9932cc;
+        --color-secondary: #302b63;
+        --color-accent: #c084fc;
+        --color-chart-1: #8a2be2;
+        --color-chart-2: #c084fc;
+        --color-chart-3: #a855f7;
+      }
+      
+      [data-theme="cobalt"] {
+        --bg-gradient: linear-gradient(135deg, #0052D4 0%, #4364F7 50%, #6FB1FC 100%);
+        --color-primary: #2563eb; /* blue-600 */
+        --color-primary-hover: #3b82f6; /* blue-500 */
+        --color-secondary: #4364F7;
+        --color-accent: #6FB1FC;
+        --color-chart-1: #2563eb;
+        --color-chart-2: #4364F7;
+        --color-chart-3: #6FB1FC;
+      }
+
+      [data-theme="inferno"] {
+        --bg-gradient: linear-gradient(135deg, #ff7e5f 0%, #feb47b 100%);
+        --color-primary: #f97316; /* orange-500 */
+        --color-primary-hover: #fb923c; /* orange-400 */
+        --color-secondary: #feb47b;
+        --color-accent: #ff7e5f;
+        --color-chart-1: #f97316;
+        --color-chart-2: #feb47b;
+        --color-chart-3: #ff7e5f;
+      }
+
+      [data-theme="hunter"] {
+        --bg-gradient: linear-gradient(135deg, #5A3F37 0%, #2C7744 100%);
+        --color-primary: #16a34a; /* green-600 */
+        --color-primary-hover: #22c55e; /* green-500 */
+        --color-secondary: #2C7744;
+        --color-accent: #5A3F37;
+        --color-chart-1: #16a34a;
+        --color-chart-2: #2C7744;
+        --color-chart-3: #22c55e;
+      }
+      
+      [data-theme="carbon"] {
+        --bg-gradient: linear-gradient(135deg, #434343 0%, #000000 100%);
+        --color-primary: #ef4444; /* red-500 */
+        --color-primary-hover: #f87171; /* red-400 */
+        --color-secondary: #434343;
+        --color-accent: #ef4444;
+        --color-chart-1: #ef4444;
+        --color-chart-2: #7f1d1d; /* red-800 */
+        --color-chart-3: #b91c1c; /* red-700 */
+      }
+
+      body {
+        background: var(--bg-gradient);
+        background-attachment: fixed;
+        overscroll-behavior-y: contain; /* Prevents pull-to-refresh for a native feel */
+      }
+      
+      @supports (padding-top: env(safe-area-inset-top)) {
+        .safe-sidebar-padding {
+          padding-top: env(safe-area-inset-top);
+          padding-bottom: env(safe-area-inset-bottom);
+          padding-left: env(safe-area-inset-left);
+        }
+
+        .header-safe-area {
+          padding-top: calc(1rem + env(safe-area-inset-top));
+          padding-bottom: 1rem;
+          padding-left: calc(1rem + env(safe-area-inset-left));
+          padding-right: calc(1rem + env(safe-area-inset-right));
+        }
+        @media (min-width: 768px) {
+          .header-safe-area {
+            padding-left: calc(1.5rem + env(safe-area-inset-left));
+            padding-right: calc(1.5rem + env(safe-area-inset-right));
+          }
+        }
+        
+        .main-safe-area {
+          padding-top: 1rem;
+          padding-left: calc(1rem + env(safe-area-inset-left));
+          padding-right: calc(1rem + env(safe-area-inset-right));
+          padding-bottom: calc(1rem + env(safe-area-inset-bottom));
+        }
+        @media (min-width: 768px) {
+           .main-safe-area {
+            padding-top: 1.5rem;
+            padding-left: calc(1.5rem + env(safe-area-inset-left));
+            padding-right: calc(1.5rem + env(safe-area-inset-right));
+            padding-bottom: calc(1.5rem + env(safe-area-inset-bottom));
+          }
+        }
+        @media (min-width: 1024px) {
+          .main-safe-area {
+            padding-top: 2rem;
+            padding-left: calc(2rem + env(safe-area-inset-left));
+            padding-right: calc(2rem + env(safe-area-inset-right));
+            padding-bottom: calc(2rem + env(safe-area-inset-bottom));
+          }
+        }
+      }
+    </style>
+    <script>
+      // Apply theme from localStorage immediately
+      const savedAppTheme = localStorage.getItem('appTheme') || 'stellar';
+      document.documentElement.setAttribute('data-theme', savedAppTheme);
+
+      // Apply dark mode from localStorage immediately
+      if (localStorage.getItem('theme') === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+        document.documentElement.classList.add('dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+      }
+    </script>
+  <script type="importmap">
+{
+  "imports": {
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "react-router-dom": "https://aistudiocdn.com/react-router-dom@^7.9.5",
+    "recharts": "https://aistudiocdn.com/recharts@^3.3.0",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "dexie": "https://aistudiocdn.com/dexie@^4.2.1",
+    "dexie-react-hooks": "https://aistudiocdn.com/dexie-react-hooks@^4.2.0",
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^0.15.0"
+  }
+}
+</script>
+</head>
+  <body class="text-gray-100">
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>
