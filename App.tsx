@@ -15,7 +15,7 @@ import Plan from './components/Plan';
 import Reports from './components/Reports';
 import Attendance from './components/Attendance';
 import ProjectFinder from './components/ProjectFinder';
-import ImageEditor from './components/ImageEditor';
+import ImageAnalyzer from './components/ImageAnalyzer';
 import SplashScreen from './components/SplashScreen';
 
 const APP_UNLOCKED_KEY = 'mst_app_unlocked';
@@ -57,7 +57,7 @@ const App: React.FC = () => {
                 <Route path="/attendance" element={<Attendance />} />
                 <Route path="/settings" element={<Settings />} />
                 <Route path="/project-finder" element={<ProjectFinder />} />
-                <Route path="/image-editor" element={<ImageEditor />} />
+                <Route path="/image-analyzer" element={<ImageAnalyzer />} />
                 <Route path="*" element={<Navigate to="/" />} />
               </Routes>
             </Layout>

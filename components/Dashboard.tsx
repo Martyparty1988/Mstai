@@ -1,5 +1,6 @@
 
 
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
@@ -8,8 +9,9 @@ import { seedDatabase } from '../services/seed';
 import { useI18n } from '../contexts/I18nContext';
 import { useAuth } from '../contexts/AuthContext';
 import AdminLoginModal from './AdminLoginModal';
-import type { Worker, Project, AttendanceSession } from '../types';
+import type { Worker, Project, AttendanceSession, TimeRecord } from '../types';
 import AIInsights from './AIInsights';
+import { processRecordDescription } from '../services/recordProcessor';
 
 // --- Clock-out Modal ---
 interface ClockOutModalProps {
@@ -150,13 +152,18 @@ const AttendanceTracker = () => {
         const { session } = clockOutState;
         
         await db.transaction('rw', db.records, db.attendanceSessions, async () => {
-            await db.records.add({
+            const newRecordData: Omit<TimeRecord, 'id'> = {
                 workerId: session.workerId,
                 projectId: projectId,
                 startTime: session.startTime,
                 endTime: new Date(),
                 description: description,
-            });
+            };
+            const newId = await db.records.add(newRecordData as TimeRecord);
+
+            // AI-powered plan update
+            await processRecordDescription({ ...newRecordData, id: newId } as TimeRecord);
+
             await db.attendanceSessions.delete(session.id!);
         });
         
@@ -362,8 +369,8 @@ const Dashboard: React.FC = () => {
             {user?.role === 'admin' && <AdminDashboard />}
             
             <div className="p-8 bg-black/20 backdrop-blur-2xl rounded-3xl border border-white/10 shadow-lg mb-8">
-                <h2 className="text-3xl font-bold mb-2 text-white">{t('ai_insights')}</h2>
-                <p className="text-gray-300 mb-6 text-lg">{t('ai_insights_desc')}</p>
+                <h2 className="text-3xl font-bold mb-2 text-white">{t('ai_plan_assistant')}</h2>
+                <p className="text-gray-300 mb-6 text-lg">{t('ai_plan_assistant_desc')}</p>
                 <AIInsights />
             </div>
 
@@ -373,4 +380,31 @@ const Dashboard: React.FC = () => {
                 <h2 className="text-3xl font-bold mb-6 text-white [text-shadow:0_1px_2px_rgba(0,0,0,0.5)]">{t('performance_overview')}</h2>
                 {data.length > 0 ? (
                     <ResponsiveContainer width="100%" height={400}>
-                        <Bar
+                        {/* Fix: The BarChart component was incomplete, causing a syntax error. It has been properly defined and closed. */}
+                        <BarChart data={data}>
+                            <defs>
+                                <linearGradient id="colorHours" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="5%" stopColor="var(--color-accent)" stopOpacity={0.8}/>
+                                    <stop offset="95%" stopColor="var(--color-accent)" stopOpacity={0.2}/>
+                                </linearGradient>
+                            </defs>
+                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
+                            <XAxis dataKey="name" stroke="rgba(255,255,255,0.8)" />
+                            <YAxis stroke="rgba(255,255,255,0.8)" />
+                            <Tooltip
+                                contentStyle={{ backgroundColor: 'rgba(0,0,0,0.7)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '1rem' }}
+                                cursor={{ fill: 'rgba(255,255,255,0.1)' }}
+                            />
+                            <Bar dataKey={t('hours_worked')} fill="url(#colorHours)" radius={[10, 10, 0, 0]} />
+                        </BarChart>
+                    </ResponsiveContainer>
+                ) : (
+                    <p className="text-center text-gray-300 py-12 text-lg">{t('no_data')}</p>
+                )}
+            </div>
+            {showAdminLogin && <AdminLoginModal onClose={handleCloseModal} />}
+        </div>
+    );
+};
+
+export default Dashboard;

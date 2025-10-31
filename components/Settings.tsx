@@ -1,5 +1,7 @@
 
 
+
+
 import React from 'react';
 import { useI18n } from '../contexts/I18nContext';
 import { useDarkMode } from '../hooks/useDarkMode';
@@ -109,15 +111,16 @@ const Settings: React.FC = () => {
       };
       reader.readAsText(file);
     };
+    input.click();
   };
 
   return (
     <div>
       <h1 className="text-5xl font-bold mb-8 text-white [text-shadow:0_4px_12px_rgba(0,0,0,0.5)]">{t('settings')}</h1>
-      <div className="space-y-8 max-w-2xl">
+      <div className="space-y-8 max-w-4xl">
         <div className="p-8 bg-black/20 backdrop-blur-2xl rounded-3xl border border-white/10 shadow-lg">
           <h2 className="text-3xl font-bold mb-4 text-white">{t('app_theme')}</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {themesData.map(themeOption => (
               <button
                 key={themeOption.id}
@@ -133,6 +136,18 @@ const Settings: React.FC = () => {
                 </div>
               </button>
             ))}
+          </div>
+          <div className="mt-8 pt-6 border-t border-white/10">
+            <h3 className="text-2xl font-bold mb-4 text-white">{t('theme')}</h3>
+            <div className="flex items-center justify-between">
+                <span className="text-gray-200 text-lg">{colorTheme === 'light' ? t('dark_mode_active') : t('light_mode_active')}</span>
+                <button 
+                onClick={toggleTheme} 
+                className="px-6 py-3 bg-white/10 text-white font-bold rounded-xl hover:bg-white/20 transition-colors text-lg"
+                >
+                {colorTheme === 'light' ? t('switch_to_dark') : t('switch_to_light')}
+                </button>
+            </div>
           </div>
         </div>
 
@@ -154,18 +169,6 @@ const Settings: React.FC = () => {
           </div>
         </div>
         
-        <div className="p-8 bg-black/20 backdrop-blur-2xl rounded-3xl border border-white/10 shadow-lg">
-          <h2 className="text-3xl font-bold mb-4 text-white">{t('theme')}</h2>
-          <div className="flex items-center justify-between">
-            <span className="text-gray-200 text-lg">{colorTheme === 'light' ? 'Dark Mode' : 'Light Mode'} is active</span>
-            <button 
-              onClick={toggleTheme} 
-              className="px-6 py-3 bg-white/10 text-white font-bold rounded-xl hover:bg-white/20 transition-colors text-lg"
-            >
-              Switch to {colorTheme === 'light' ? 'Dark' : 'Light'}
-            </button>
-          </div>
-        </div>
         <div className="p-8 bg-black/20 backdrop-blur-2xl rounded-3xl border border-white/10 shadow-lg">
           <h2 className="text-3xl font-bold mb-4 text-white">{t('language')}</h2>
           <select

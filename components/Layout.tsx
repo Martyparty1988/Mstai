@@ -1,5 +1,6 @@
 
 
+
 import React, from 'react';
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
@@ -18,7 +19,7 @@ import DocumentTextIcon from './icons/DocumentTextIcon';
 import CalendarIcon from './icons/CalendarIcon';
 import ChartBarIcon from './icons/ChartBarIcon';
 import SearchIcon from './icons/SearchIcon';
-import ImageIcon from './icons/ImageIcon';
+import EyeIcon from './icons/EyeIcon';
 
 const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isSidebarOpen, setSidebarOpen] = React.useState(false);
@@ -40,7 +41,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
   const aiTools = [
     { to: '/project-finder', label: t('project_finder'), icon: <SearchIcon className="w-7 h-7" /> },
-    { to: '/image-editor', label: t('image_editor'), icon: <ImageIcon className="w-7 h-7" /> },
+    { to: '/image-analyzer', label: t('image_analyzer'), icon: <EyeIcon className="w-7 h-7" /> },
   ];
 
   return (

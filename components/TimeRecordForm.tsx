@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../services/db';
@@ -6,6 +7,7 @@ import type { TimeRecord } from '../types';
 import { useI18n } from '../contexts/I18nContext';
 import { GoogleGenAI } from '@google/genai';
 import BrainIcon from './icons/BrainIcon';
+import { processRecordDescription } from '../services/recordProcessor';
 
 interface TimeRecordFormProps {
   record?: TimeRecord;
@@ -70,11 +72,19 @@ const TimeRecordForm: React.FC<TimeRecordFormProps> = ({ record, onClose }) => {
     };
 
     try {
+      let recordToProcess: TimeRecord;
+
       if (record?.id) {
         await db.records.update(record.id, recordData);
+        recordToProcess = { ...recordData, id: record.id };
       } else {
-        await db.records.add(recordData);
+        const newId = await db.records.add(recordData as TimeRecord);
+        recordToProcess = { ...recordData, id: newId };
       }
+
+      // AI-powered plan update
+      await processRecordDescription(recordToProcess);
+      
       onClose();
     } catch (error) {
       console.error("Failed to save time record:", error);

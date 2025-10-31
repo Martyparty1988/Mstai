@@ -1,5 +1,6 @@
 
 
+
 import React, { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { GoogleGenAI } from '@google/genai';
@@ -13,9 +14,12 @@ const AIInsights: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
     const [result, setResult] = useState<string | null>(null);
 
+    // Fetch all necessary data for the AI context
     const workers = useLiveQuery(() => db.workers.toArray());
     const projects = useLiveQuery(() => db.projects.toArray());
     const records = useLiveQuery(() => db.records.toArray());
+    const solarTables = useLiveQuery(() => db.solarTables.toArray());
+    const tableAssignments = useLiveQuery(() => db.tableAssignments.toArray());
     
     const handleGenerate = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -34,17 +38,30 @@ const AIInsights: React.FC = () => {
         try {
             const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
             
-            // Sanitize data for the prompt - remove file objects
+            // Sanitize project data (remove file blobs)
             const projectsForAI = projects?.map(({planFile, ...rest}) => rest);
+
+            // Create a map for quick worker name lookup
+            const workerMap = new Map(workers?.map(w => [w.id!, w.name]));
+
+            // Resolve worker names in assignments for better AI context
+            const assignmentsWithNames = tableAssignments?.map(a => ({
+                tableId: a.tableId,
+                workerId: a.workerId,
+                workerName: workerMap.get(a.workerId) || 'Unknown Worker'
+            }));
 
             const dataContext = JSON.stringify({
                 workers,
                 projects: projectsForAI,
-                records
+                records,
+                solarTables,
+                tableAssignments: assignmentsWithNames,
             }, null, 2);
 
             const fullPrompt = `
-                Based on the following JSON data from a project management application, please answer the user's question.
+                Based on the following JSON data from a solar project management application, please answer the user's question.
+                The data includes workers, projects, time records, a list of all solar tables with their status (pending/completed), and which workers are assigned to which tables.
                 Provide a concise and clear answer. You can use markdown for formatting if it helps clarity (e.g., lists, bold text).
 
                 DATA CONTEXT:

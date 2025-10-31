@@ -1,9 +1,11 @@
 
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../services/db';
 import { useI18n } from '../contexts/I18nContext';
 import type { Project, SolarTable, TableAssignment, Worker } from '../types';
+
+declare const pdfjsLib: any;
 
 // Helper function to derive table type from code
 const getTableType = (code: string): 'small' | 'medium' | 'large' | null => {
@@ -12,6 +14,16 @@ const getTableType = (code: string): 'small' | 'medium' | 'large' | null => {
   if (c.startsWith('it42')) return 'medium';
   if (c.startsWith('it56')) return 'large';
   return null;
+};
+
+// Utility to get a consistent color for a worker
+const getWorkerColor = (workerId: number) => {
+  const colors = [
+    '#ef4444', '#f97316', '#eab308', '#84cc16', '#22c55e', 
+    '#10b981', '#14b8a6', '#06b6d4', '#0ea5e9', '#3b82f6', 
+    '#6366f1', '#8b5cf6', '#a855f7', '#d946ef', '#ec4899'
+  ];
+  return colors[workerId % colors.length];
 };
 
 // --- Table Management Modal ---
@@ -29,11 +41,13 @@ const TableManagementModal: React.FC<TableManagementModalProps> = ({ table, coor
     const [status, setStatus] = useState<'pending' | 'completed'>('pending');
     const [workerToAssign, setWorkerToAssign] = useState<number | ''>('');
 
+    const assignments = useLiveQuery(() => table ? db.tableAssignments.where('tableId').equals(table.id!).toArray() : undefined, [table?.id]);
     const allWorkers = useLiveQuery(() => db.workers.toArray());
-    const assignments = useLiveQuery(() => table?.id ? db.tableAssignments.where('tableId').equals(table.id).toArray() : [], [table?.id]);
 
-    const workerMap = useMemo(() => new Map(allWorkers?.map(w => [w.id!, w])), [allWorkers]);
-
+    const assignedWorkerIds = useMemo(() => assignments?.map(a => a.workerId) || [], [assignments]);
+    const unassignedWorkers = useMemo(() => allWorkers?.filter(w => !assignedWorkerIds.includes(w.id!)), [allWorkers, assignedWorkerIds]);
+    const assignedWorkers = useMemo(() => allWorkers?.filter(w => assignedWorkerIds.includes(w.id!)), [allWorkers, assignedWorkerIds]);
+    
     useEffect(() => {
         if (table) {
             setTableCode(table.tableCode);
@@ -45,6 +59,20 @@ const TableManagementModal: React.FC<TableManagementModalProps> = ({ table, coor
     useEffect(() => {
         setTableType(getTableType(tableCode));
     }, [tableCode]);
+
+    const handleAssignWorker = async () => {
+        if (!table?.id || !workerToAssign) return;
+        await db.tableAssignments.add({ tableId: table.id, workerId: Number(workerToAssign) });
+        setWorkerToAssign('');
+    };
+
+    const handleUnassignWorker = async (workerId: number) => {
+        if (!table?.id) return;
+        const assignment = await db.tableAssignments.where({ tableId: table.id, workerId }).first();
+        if (assignment) {
+            await db.tableAssignments.delete(assignment.id!);
+        }
+    };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -79,27 +107,6 @@ const TableManagementModal: React.FC<TableManagementModalProps> = ({ table, coor
             onClose();
         }
     };
-    
-    const handleAssignWorker = async () => {
-        if (table?.id && workerToAssign) {
-            const assignment: Omit<TableAssignment, 'id'> = {
-                tableId: table.id,
-                workerId: Number(workerToAssign),
-            };
-            await db.tableAssignments.add(assignment as TableAssignment);
-            setWorkerToAssign('');
-        }
-    };
-
-    const handleUnassignWorker = async (assignmentId: number) => {
-        await db.tableAssignments.delete(assignmentId);
-    };
-
-    const availableWorkers = useMemo(() => {
-        if (!allWorkers || !assignments) return [];
-        const assignedIds = new Set(assignments.map(a => a.workerId));
-        return allWorkers.filter(w => !assignedIds.has(w.id!));
-    }, [allWorkers, assignments]);
 
     return (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 backdrop-blur-lg p-4">
@@ -121,18 +128,44 @@ const TableManagementModal: React.FC<TableManagementModalProps> = ({ table, coor
                     </div>
 
                     {table && (
-                        <div>
-                            <label htmlFor="status" className="block text-lg font-medium text-gray-300 mb-2">{t('status')}</label>
-                            <select
-                                id="status"
-                                value={status}
-                                onChange={(e) => setStatus(e.target.value as 'pending' | 'completed')}
-                                className="mt-1 block w-full p-4 bg-black/20 text-white border border-white/20 rounded-xl focus:ring-blue-400 focus:border-blue-400 text-lg [&>option]:bg-gray-800"
-                            >
-                                <option value="pending">{t('pending')}</option>
-                                <option value="completed">{t('completed')}</option>
-                            </select>
-                        </div>
+                        <>
+                            <div>
+                                <label htmlFor="status" className="block text-lg font-medium text-gray-300 mb-2">{t('status')}</label>
+                                <select
+                                    id="status"
+                                    value={status}
+                                    onChange={(e) => setStatus(e.target.value as 'pending' | 'completed')}
+                                    className="mt-1 block w-full p-4 bg-black/20 text-white border border-white/20 rounded-xl focus:ring-blue-400 focus:border-blue-400 text-lg [&>option]:bg-gray-800"
+                                >
+                                    <option value="pending">{t('pending')}</option>
+                                    <option value="completed">{t('completed')}</option>
+                                </select>
+                            </div>
+
+                             <div className="space-y-4 pt-4 border-t border-white/10">
+                                <h3 className="text-xl font-bold text-white">{t('assigned_workers')}</h3>
+                                {assignedWorkers && assignedWorkers.length > 0 ? (
+                                    <ul className="space-y-2">
+                                        {assignedWorkers.map(worker => (
+                                            <li key={worker.id} className="flex justify-between items-center p-2 bg-white/5 rounded-lg">
+                                                <span className="text-gray-200">{worker.name}</span>
+                                                <button type="button" onClick={() => handleUnassignWorker(worker.id!)} className="text-pink-500 hover:underline text-sm font-bold">{t('unassign')}</button>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                ) : <p className="text-gray-400">{t('no_data')}</p>}
+
+                                {unassignedWorkers && unassignedWorkers.length > 0 && (
+                                    <div className="flex gap-2">
+                                        <select value={workerToAssign} onChange={e => setWorkerToAssign(Number(e.target.value))} className="flex-grow p-2 bg-black/20 text-white border border-white/20 rounded-lg focus:ring-blue-400 focus:border-blue-400 [&>option]:bg-gray-800">
+                                            <option value="" disabled>{t('select_worker')}</option>
+                                            {unassignedWorkers.map(w => <option key={w.id} value={w.id!}>{w.name}</option>)}
+                                        </select>
+                                        <button type="button" onClick={handleAssignWorker} disabled={!workerToAssign} className="px-4 bg-cyan-600 text-white font-bold rounded-lg hover:bg-cyan-500 disabled:opacity-50">{t('assign_worker')}</button>
+                                    </div>
+                                )}
+                            </div>
+                        </>
                     )}
                     
                     <div className="flex justify-between items-center pt-4">
@@ -143,138 +176,267 @@ const TableManagementModal: React.FC<TableManagementModalProps> = ({ table, coor
                         </div>
                     </div>
                 </form>
-
-                {table && (
-                    <div className="mt-8 border-t border-white/10 pt-6">
-                         <h3 className="text-2xl font-bold mb-4 text-white">{t('assigned_workers')}</h3>
-                         <div className="space-y-3 mb-4">
-                             {assignments?.map(a => (
-                                 <div key={a.id} className="flex justify-between items-center bg-white/5 p-3 rounded-lg">
-                                     <span className="text-gray-200 font-medium">{workerMap.get(a.workerId)?.name || '...'}</span>
-                                     <button onClick={() => handleUnassignWorker(a.id!)} className="text-xs text-pink-400 hover:underline">{t('unassign')}</button>
-                                 </div>
-                             ))}
-                             {assignments?.length === 0 && <p className="text-gray-400">{t('no_data')}</p>}
-                         </div>
-                         <div className="flex gap-2">
-                             <select value={workerToAssign} onChange={e => setWorkerToAssign(Number(e.target.value))} className="flex-grow p-3 bg-black/20 text-white border border-white/20 rounded-xl focus:ring-blue-400 focus:border-blue-400 text-base [&>option]:bg-gray-800">
-                                 <option value="" disabled>{t('select_worker')}</option>
-                                 {availableWorkers.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
-                             </select>
-                             <button onClick={handleAssignWorker} disabled={!workerToAssign} className="px-5 py-3 bg-green-600/80 text-white font-bold rounded-xl hover:bg-green-600 transition-colors disabled:opacity-50 text-base">{t('assign_worker')}</button>
-                         </div>
-                    </div>
-                )}
             </div>
         </div>
     );
 };
 
 // --- Main Plan Component ---
-
 const Plan: React.FC = () => {
     const { t } = useI18n();
     const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
     const [view, setView] = useState<'plan' | 'registry'>('plan');
     const [modalState, setModalState] = useState<{ isOpen: boolean; coords?: { x: number; y: number }; table?: SolarTable; }>({ isOpen: false });
-    const containerRef = useRef<HTMLDivElement>(null);
-    const [planStatus, setPlanStatus] = useState<'idle' | 'loading' | 'error' | 'loaded'>('idle');
+    const planContentRef = useRef<HTMLDivElement>(null);
+    const [planStatus, setPlanStatus] = useState<'idle' | 'loading' | 'error' | 'loaded' | 'no-plan'>('idle');
+    const [zoom, setZoom] = useState(1);
+    const draggedMarkerRef = useRef<{ id: number; table: SolarTable; offsetX: number; offsetY: number; hasDragged: boolean } | null>(null);
+
+    const canvasRef = useRef<HTMLCanvasElement>(null);
+    const renderTaskRef = useRef<any>(null);
+    const [pdfDoc, setPdfDoc] = useState<any>(null);
+    const [pageNum, setPageNum] = useState(1);
+    const [totalPages, setTotalPages] = useState(0);
 
     const projects = useLiveQuery(() => db.projects.toArray());
-    const workers = useLiveQuery(() => db.workers.toArray());
+    const selectedProject = useLiveQuery(() => selectedProjectId ? db.projects.get(selectedProjectId) : undefined, [selectedProjectId]);
     const tables = useLiveQuery(() => selectedProjectId ? db.solarTables.where('projectId').equals(selectedProjectId).toArray() : [], [selectedProjectId]);
-    const assignments = useLiveQuery(() => {
-        if (!tables || tables.length === 0) return Promise.resolve([]);
-        const tableIds = tables.map(t => t.id!);
-        return db.tableAssignments.where('tableId').anyOf(tableIds).toArray();
-    }, [tables]);
-
-    const workerMap = useMemo(() => new Map(workers?.map(w => [w.id!, w])), [workers]);
-    const assignmentsByTableId = useMemo(() => {
-        const map = new Map<number, TableAssignment[]>();
+    
+    const tableIds = useMemo(() => tables?.map(t => t.id!) || [], [tables]);
+    const assignments = useLiveQuery(() => tableIds.length > 0 ? db.tableAssignments.where('tableId').anyOf(tableIds).toArray() : [], [tableIds]);
+    
+    const assignmentCountMap = useMemo(() => {
+        const map = new Map<number, number>();
         if (!assignments) return map;
         for (const assignment of assignments) {
-            if (!map.has(assignment.tableId)) {
-                map.set(assignment.tableId, []);
-            }
-            map.get(assignment.tableId)!.push(assignment);
+            map.set(assignment.tableId, (map.get(assignment.tableId) || 0) + 1);
         }
         return map;
     }, [assignments]);
     
-    useEffect(() => {
-        if (selectedProjectId) {
-            setPlanStatus('loading');
-            const img = new Image();
-            img.src = `https://picsum.photos/seed/${selectedProjectId}/1200/800`;
-            img.onload = () => setPlanStatus('loaded');
-            img.onerror = () => setPlanStatus('error');
-        } else {
-            setPlanStatus('idle');
+    const tableIdToFirstWorkerIdMap = useMemo(() => {
+        const map = new Map<number, number>();
+        if (!assignments) return map;
+
+        // Sort assignments to be deterministic if order changes
+        const sortedAssignments = [...assignments].sort((a, b) => a.id! - b.id!);
+
+        for (const assignment of sortedAssignments) {
+            if (!map.has(assignment.tableId)) {
+                map.set(assignment.tableId, assignment.workerId);
+            }
         }
-    }, [selectedProjectId]);
+        return map;
+    }, [assignments]);
+
+    // Calculate workload per worker
+    const workerWorkload = useMemo(() => {
+        const workload = new Map<number, number>();
+        if (!assignments) return workload;
+
+        for (const assignment of assignments) {
+            workload.set(assignment.workerId, (workload.get(assignment.workerId) || 0) + 1);
+        }
+        return workload;
+    }, [assignments]);
+
+    useEffect(() => {
+        pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js`;
+    }, []);
+
+    const renderPage = useCallback(async (pdf: any, pageNumber: number) => {
+        if (!canvasRef.current) return;
+    
+        try {
+            const page = await pdf.getPage(pageNumber);
+            const viewport = page.getViewport({ scale: zoom });
+            const canvas = canvasRef.current;
+            const context = canvas.getContext('2d');
+            
+            canvas.height = viewport.height;
+            canvas.width = viewport.width;
+    
+            const renderContext = { canvasContext: context, viewport };
+            const task = page.render(renderContext);
+            renderTaskRef.current = task;
+            
+            await task.promise;
+        } catch (err: any) {
+            if (err.name !== 'RenderingCancelledException') {
+                console.error('PDF render failed:', err);
+                setPlanStatus('error');
+            }
+        }
+    }, [zoom]);
+
+    useEffect(() => {
+        if (!selectedProject) {
+            setPlanStatus(selectedProjectId ? 'loading' : 'idle');
+            setPdfDoc(null);
+            return;
+        }
+    
+        if (!selectedProject.planFile) {
+            setPlanStatus('no-plan');
+            setPdfDoc(null);
+            return;
+        }
+    
+        setPlanStatus('loading');
+        const loadPdf = async () => {
+            const arrayBuffer = await selectedProject.planFile!.arrayBuffer();
+            const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+            try {
+                const pdf = await loadingTask.promise;
+                setPdfDoc(pdf);
+                setTotalPages(pdf.numPages);
+                setPageNum(1); // Reset to first page on new PDF
+                setPlanStatus('loaded');
+            } catch (error) {
+                console.error("Failed to load PDF:", error);
+                setPlanStatus('error');
+            }
+        };
+    
+        loadPdf();
+    
+        return () => {
+            if (renderTaskRef.current) {
+                renderTaskRef.current.cancel();
+            }
+        };
+    }, [selectedProject, selectedProjectId]);
+    
+    useEffect(() => {
+        if (planStatus === 'loaded' && pdfDoc) {
+            renderPage(pdfDoc, pageNum);
+        }
+    }, [planStatus, pdfDoc, pageNum, renderPage]);
 
     const handlePlanClick = (e: React.MouseEvent<HTMLDivElement>) => {
-        if (!containerRef.current) return;
-        const rect = containerRef.current.getBoundingClientRect();
+        if ((e.target as HTMLElement).closest('[id^="marker-"]')) return;
+        if (!planContentRef.current) return;
+        const rect = planContentRef.current.getBoundingClientRect();
         const x = (e.clientX - rect.left) / rect.width * 100;
         const y = (e.clientY - rect.top) / rect.height * 100;
         setModalState({ isOpen: true, coords: { x, y } });
     };
 
-    const handleMarkerClick = (e: React.MouseEvent, table: SolarTable) => {
+    const handleMouseMove = useCallback((e: MouseEvent) => {
+        if (!draggedMarkerRef.current || !planContentRef.current) return;
+        draggedMarkerRef.current.hasDragged = true;
+        
+        const markerElem = document.getElementById(`marker-${draggedMarkerRef.current.id}`);
+        const container = planContentRef.current;
+        if (!markerElem || !container) return;
+        
+        const containerRect = container.getBoundingClientRect();
+        
+        const newLeftPx = e.clientX - containerRect.left - draggedMarkerRef.current.offsetX;
+        const newTopPx = e.clientY - containerRect.top - draggedMarkerRef.current.offsetY;
+        
+        const markerWidth = markerElem.offsetWidth;
+        const markerHeight = markerElem.offsetHeight;
+        
+        const markerCenterX = newLeftPx + markerWidth / 2;
+        const markerCenterY = newTopPx + markerHeight / 2;
+    
+        let centerXPercent = (markerCenterX / containerRect.width) * 100;
+        let centerYPercent = (markerCenterY / containerRect.height) * 100;
+    
+        const halfWidthPercent = (markerWidth / 2 / containerRect.width) * 100;
+        const halfHeightPercent = (markerHeight / 2 / containerRect.height) * 100;
+        centerXPercent = Math.max(halfWidthPercent, Math.min(centerXPercent, 100 - halfWidthPercent));
+        centerYPercent = Math.max(halfHeightPercent, Math.min(centerYPercent, 100 - halfHeightPercent));
+    
+        markerElem.style.left = `${centerXPercent}%`;
+        markerElem.style.top = `${centerYPercent}%`;
+    }, []);
+
+    const handleMouseUp = useCallback(async () => {
+        if (!draggedMarkerRef.current) return;
+    
+        if (draggedMarkerRef.current.hasDragged) {
+            const markerElem = document.getElementById(`marker-${draggedMarkerRef.current.id}`);
+            if (markerElem) {
+                const finalX = parseFloat(markerElem.style.left);
+                const finalY = parseFloat(markerElem.style.top);
+                await db.solarTables.update(draggedMarkerRef.current.id, { x: finalX, y: finalY });
+            }
+        } else {
+            setModalState({ isOpen: true, table: draggedMarkerRef.current.table });
+        }
+    
+        window.removeEventListener('mousemove', handleMouseMove);
+        window.removeEventListener('mouseup', handleMouseUp);
+        draggedMarkerRef.current = null;
+    }, [handleMouseMove, setModalState]);
+
+    const handleMarkerMouseDown = useCallback((e: React.MouseEvent, table: SolarTable) => {
+        e.preventDefault();
         e.stopPropagation();
-        setModalState({ isOpen: true, table });
-    };
+        
+        const target = e.currentTarget as HTMLDivElement;
+        const rect = target.getBoundingClientRect();
+        
+        draggedMarkerRef.current = {
+            id: table.id!,
+            table: table,
+            offsetX: e.clientX - rect.left,
+            offsetY: e.clientY - rect.top,
+            hasDragged: false
+        };
+
+        window.addEventListener('mousemove', handleMouseMove);
+        window.addEventListener('mouseup', handleMouseUp);
+    }, [handleMouseMove, handleMouseUp]);
     
     const handleStatusToggle = async (table: SolarTable) => {
         const newStatus = table.status === 'pending' ? 'completed' : 'pending';
         await db.solarTables.update(table.id!, { status: newStatus });
     };
 
-    const getTableMarkerStyle = (tableType: 'small' | 'medium' | 'large', status: 'pending' | 'completed'): React.CSSProperties => {
+    const getTableMarkerStyle = (table: SolarTable): React.CSSProperties => {
+        const firstWorkerId = tableIdToFirstWorkerIdMap.get(table.id!);
+        const workload = firstWorkerId ? workerWorkload.get(firstWorkerId) || 1 : 1;
+        
+        // Base size and scale factor for workload visualization
+        const baseSize = 28;
+        const scale = 1 + Math.log1p(workload - 1) * 0.2; // Logarithmic scale to prevent huge markers
+        const scaledSize = baseSize * scale;
+
+        // Base color - moved up to be used in boxShadow
+        let backgroundColor = '#6b7280'; // Gray for unassigned
+        if (firstWorkerId) {
+            backgroundColor = getWorkerColor(firstWorkerId);
+        }
+
         const baseStyle: React.CSSProperties = {
             position: 'absolute',
             transform: 'translate(-50%, -50%)',
-            cursor: 'pointer',
+            cursor: 'grab',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             color: 'white',
             fontWeight: 'bold',
             transition: 'all 0.2s ease-in-out',
-            opacity: status === 'completed' ? 0.65 : 1,
-            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.5)',
+            opacity: table.status === 'completed' ? 0.65 : 1,
+            // Enhanced shadow to show workload intensity with a glow effect
+            boxShadow: `0 2px 8px rgba(0, 0, 0, 0.5), 0 0 ${Math.min(workload * 1.5, 20)}px ${backgroundColor}`,
+            border: '2px solid white',
+            width: `${scaledSize}px`,
+            height: `${scaledSize}px`,
         };
-    
-        switch (tableType) {
+        
+        switch (table.tableType) {
             case 'small':
-                return {
-                    ...baseStyle,
-                    width: '28px',
-                    height: '28px',
-                    borderRadius: '50%',
-                    backgroundColor: 'var(--color-chart-2)',
-                    border: '2px solid white',
-                };
+                return { ...baseStyle, borderRadius: '50%', backgroundColor };
             case 'medium':
-                return {
-                    ...baseStyle,
-                    width: '28px',
-                    height: '28px',
-                    borderRadius: '6px',
-                    backgroundColor: 'var(--color-primary)',
-                    border: '2px solid white',
-                };
+                return { ...baseStyle, borderRadius: '6px', backgroundColor };
             case 'large':
-                return {
-                    ...baseStyle,
-                    width: '40px',
-                    height: '24px',
-                    borderRadius: '6px',
-                    backgroundColor: 'var(--color-secondary)',
-                    border: '2px solid white',
-                };
+                 // Large tables are rectangular and bigger
+                return { ...baseStyle, width: `${scaledSize * 1.4}px`, height: `${scaledSize * 0.85}px`, borderRadius: '6px', backgroundColor };
             default:
                 return { ...baseStyle, backgroundColor: '#6b7280' };
         }
@@ -284,28 +446,29 @@ const Plan: React.FC = () => {
         if (!selectedProjectId) return <p className="text-center text-gray-400">{t('select_project_to_view_plan')}</p>;
         if (planStatus === 'loading') return <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white"></div>;
         if (planStatus === 'error') return <p className="text-center text-red-400 font-bold">{t('plan_load_error')}</p>;
+        if (planStatus === 'no-plan') return <p className="text-center text-gray-400 font-bold">{t('no_plan_available')}</p>;
         
         return (
             <>
-                <img src={`https://picsum.photos/seed/${selectedProjectId}/1200/800`} alt="Project Plan" className="w-full h-full object-contain" />
+                <canvas ref={canvasRef} className="rounded-md shadow-lg" />
                 {tables?.map(table => {
-                    const tableAssignments = assignmentsByTableId.get(table.id!) || [];
-                    const markerStyle = getTableMarkerStyle(table.tableType, table.status);
-                    
+                    const assignmentCount = assignmentCountMap.get(table.id!) || 0;
                     return (
                         <div
                             key={table.id}
-                            style={{ left: `${table.x}%`, top: `${table.y}%`, ...markerStyle }}
-                            onClick={(e) => handleMarkerClick(e, table)}
+                            id={`marker-${table.id!}`}
+                            style={{ left: `${table.x}%`, top: `${table.y}%`, ...getTableMarkerStyle(table) }}
+                            onMouseDown={(e) => handleMarkerMouseDown(e, table)}
                             title={`${table.tableCode} (${t(table.status)})`}
+                            className="active:cursor-grabbing"
                         >
                             <span className="text-[10px] pointer-events-none">
                                 {table.tableCode.split(/[-.]/).pop()}
                             </span>
-                            {tableAssignments.length > 0 && (
-                                <div className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-red-500 rounded-full text-white flex items-center justify-center text-[9px] font-bold border-2 border-white">
-                                    {tableAssignments.length}
-                                </div>
+                             {assignmentCount > 0 && (
+                                <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center border-2 border-white shadow-md">
+                                    {assignmentCount}
+                                </span>
                             )}
                         </div>
                     );
@@ -319,16 +482,32 @@ const Plan: React.FC = () => {
             <h1 className="text-5xl font-bold text-white [text-shadow:0_4px_12px_rgba(0,0,0,0.5)] mb-8">{t('plan')}</h1>
 
             <div className="p-6 bg-black/20 backdrop-blur-2xl rounded-3xl border border-white/10 shadow-lg mb-8">
-                <div className="flex flex-col md:flex-row gap-4">
+                <div className="flex flex-col md:flex-row gap-4 items-center">
                     <select
                         title={t('select_project')}
                         value={selectedProjectId || ''}
                         onChange={(e) => setSelectedProjectId(e.target.value ? Number(e.target.value) : null)}
-                        className="flex-grow p-4 bg-black/20 text-white border border-white/20 rounded-xl focus:ring-blue-400 focus:border-blue-400 text-lg [&>option]:bg-gray-800"
+                        className="flex-grow w-full md:w-auto p-4 bg-black/20 text-white border border-white/20 rounded-xl focus:ring-blue-400 focus:border-blue-400 text-lg [&>option]:bg-gray-800"
                     >
                         <option value="">{t('select_project')}</option>
                         {projects?.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                     </select>
+                    {selectedProjectId && view === 'plan' && planStatus === 'loaded' && (
+                        <div className="flex items-center gap-4 flex-wrap">
+                             {totalPages > 1 && (
+                                <div className="flex items-center gap-2">
+                                    <button onClick={() => setPageNum(p => Math.max(1, p - 1))} disabled={pageNum <= 1} className="px-3 py-2 bg-white/10 text-white font-bold rounded-xl hover:bg-white/20 disabled:opacity-50 transition-colors">‹</button>
+                                    <span className="text-white font-bold">{t('page')} {pageNum} / {totalPages}</span>
+                                    <button onClick={() => setPageNum(p => Math.min(totalPages, p + 1))} disabled={pageNum >= totalPages} className="px-3 py-2 bg-white/10 text-white font-bold rounded-xl hover:bg-white/20 disabled:opacity-50 transition-colors">›</button>
+                                </div>
+                            )}
+                            <div className="flex items-center gap-2">
+                                <button onClick={() => setZoom(z => Math.max(0.5, z - 0.2))} className="px-4 py-2 bg-white/10 text-white font-bold rounded-xl hover:bg-white/20 transition-colors text-xl">{t('zoom_out')}</button>
+                                <span className="text-white font-semibold w-12 text-center">{(zoom * 100).toFixed(0)}%</span>
+                                <button onClick={() => setZoom(z => Math.min(3, z + 0.2))} className="px-4 py-2 bg-white/10 text-white font-bold rounded-xl hover:bg-white/20 transition-colors text-xl">{t('zoom_in')}</button>
+                            </div>
+                        </div>
+                    )}
                 </div>
                 {selectedProjectId && (
                     <div className="mt-4 flex gap-2">
@@ -339,13 +518,16 @@ const Plan: React.FC = () => {
             </div>
 
             {view === 'plan' && (
-                 <div 
-                    ref={containerRef}
-                    className="relative w-full h-[600px] bg-black/20 backdrop-blur-2xl rounded-3xl border border-white/10 shadow-lg overflow-hidden flex items-center justify-center"
-                    onClick={planStatus === 'loaded' ? handlePlanClick : undefined}
-                    title={planStatus === 'loaded' ? t('click_plan_to_add_table') : ''}
-                >
-                    {renderPlanContent()}
+                 <div className="w-full h-[600px] bg-black/20 backdrop-blur-2xl rounded-3xl border border-white/10 shadow-lg overflow-auto flex justify-center items-start p-2">
+                    <div 
+                        ref={planContentRef}
+                        className="relative w-fit h-fit"
+                        style={{ cursor: planStatus === 'loaded' ? 'copy' : 'default' }}
+                        onClick={planStatus === 'loaded' ? handlePlanClick : undefined}
+                        title={planStatus === 'loaded' ? t('click_plan_to_add_table') : ''}
+                    >
+                        {renderPlanContent()}
+                    </div>
                 </div>
             )}
             
@@ -357,30 +539,15 @@ const Plan: React.FC = () => {
                                 <tr>
                                     <th className="px-6 py-4 text-left text-sm font-bold text-gray-200 uppercase tracking-wider">{t('table_code')}</th>
                                     <th className="px-6 py-4 text-left text-sm font-bold text-gray-200 uppercase tracking-wider">{t('table_type')}</th>
-                                    <th className="px-6 py-4 text-left text-sm font-bold text-gray-200 uppercase tracking-wider">{t('assigned_workers')}</th>
                                     <th className="px-6 py-4 text-left text-sm font-bold text-gray-200 uppercase tracking-wider">{t('status')}</th>
+                                    <th className="px-6 py-4 text-left text-sm font-bold text-gray-200 uppercase tracking-wider">{t('assigned_workers')}</th>
                                     <th className="relative px-6 py-4"><span className="sr-only">Actions</span></th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-white/10">
-                                {tables?.map(table => {
-                                    const tableAssignments = assignmentsByTableId.get(table.id!) || [];
-                                    return (
-                                        <tr key={table.id} className="hover:bg-white/10 transition-colors">
-                                            <td className="px-6 py-5 whitespace-nowrap text-lg font-medium text-white">{table.tableCode}</td>
-                                            <td className="px-6 py-5 whitespace-nowrap text-lg text-gray-200">{t(table.tableType)}</td>
-                                            <td className="px-6 py-5 text-lg text-gray-200">{tableAssignments.map(a => workerMap.get(a.workerId)?.name).join(', ')}</td>
-                                            <td className="px-6 py-5 whitespace-nowrap">
-                                                <button onClick={() => handleStatusToggle(table)} className={`px-4 py-1.5 inline-flex text-base leading-5 font-bold rounded-full text-white ${table.status === 'completed' ? 'bg-green-600' : 'bg-gray-600'}`}>
-                                                    {t(table.status)}
-                                                </button>
-                                            </td>
-                                            <td className="px-6 py-5 whitespace-nowrap text-right text-lg font-bold">
-                                                <button onClick={() => setModalState({ isOpen: true, table })} className="text-blue-400 hover:underline">{t('edit_table')}</button>
-                                            </td>
-                                        </tr>
-                                    );
-                                })}
+                                {tables?.map(table => (
+                                    <RegistryRow key={table.id} table={table} onStatusToggle={handleStatusToggle} onEditRequest={(t) => setModalState({isOpen: true, table: t})} />
+                                ))}
                             </tbody>
                         </table>
                         {(!tables || tables.length === 0) && <p className="text-center py-12 text-gray-300 text-lg">{t('no_tables_defined')}</p>}
@@ -397,6 +564,53 @@ const Plan: React.FC = () => {
                 />
             )}
         </div>
+    );
+};
+
+interface RegistryRowProps {
+    table: SolarTable;
+    onStatusToggle: (table: SolarTable) => void;
+    onEditRequest: (table: SolarTable) => void;
+}
+
+const RegistryRow: React.FC<RegistryRowProps> = ({ table, onStatusToggle, onEditRequest }) => {
+    const { t } = useI18n();
+    const assignments = useLiveQuery(() => db.tableAssignments.where('tableId').equals(table.id!).toArray(), [table.id]);
+    const workers = useLiveQuery(() => assignments ? db.workers.where('id').anyOf(assignments.map(a => a.workerId)).toArray() : [], [assignments]);
+    
+    const assignedWorkersDisplay = useMemo(() => {
+        const count = assignments?.length || 0;
+        if (count === 0) {
+            return <span className="text-gray-500">0</span>;
+        }
+        const names = workers?.map(w => w.name).join(', ');
+        return (
+            <div className="flex items-center gap-3">
+                 <span className="inline-flex items-center justify-center w-7 h-7 text-sm font-bold text-white bg-[var(--color-secondary)] rounded-full flex-shrink-0">{count}</span>
+                 <span className="truncate max-w-xs" title={names}>{names}</span>
+            </div>
+        );
+    }, [assignments, workers]);
+
+    return (
+        <tr className="hover:bg-white/10 transition-colors">
+            <td className="px-6 py-5 whitespace-nowrap text-lg font-medium text-white">{table.tableCode}</td>
+            <td className="px-6 py-5 whitespace-nowrap text-lg text-gray-200">{t(table.tableType)}</td>
+            <td className="px-6 py-5 whitespace-nowrap">
+                <span
+                    onClick={() => onStatusToggle(table)}
+                    className={`cursor-pointer px-4 py-1.5 inline-flex text-base leading-5 font-bold rounded-full text-white transition-opacity hover:opacity-90 ${
+                        table.status === 'completed' ? 'bg-green-600' : 'bg-yellow-500'
+                    }`}
+                >
+                    {t(table.status)}
+                </span>
+            </td>
+            <td className="px-6 py-5 whitespace-nowrap text-lg text-gray-200">{assignedWorkersDisplay}</td>
+            <td className="px-6 py-5 whitespace-nowrap text-right text-lg font-bold">
+                <button onClick={() => onEditRequest(table)} className="text-blue-400 hover:underline">{t('edit_table')}</button>
+            </td>
+        </tr>
     );
 };
 

@@ -66,6 +66,39 @@
         --color-chart-3: #b91c1c; /* red-700 */
       }
 
+      [data-theme="emerald"] {
+        --bg-gradient: linear-gradient(135deg, #06202A 0%, #2C5364 100%);
+        --color-primary: #10b981; /* emerald-500 */
+        --color-primary-hover: #34d399; /* emerald-400 */
+        --color-secondary: #2C5364;
+        --color-accent: #6ee7b7; /* emerald-300 */
+        --color-chart-1: #10b981;
+        --color-chart-2: #6ee7b7;
+        --color-chart-3: #34d399;
+      }
+
+      [data-theme="crimson"] {
+        --bg-gradient: linear-gradient(135deg, #23074d 0%, #cc5333 100%);
+        --color-primary: #dc2626; /* red-600 */
+        --color-primary-hover: #ef4444; /* red-500 */
+        --color-secondary: #cc5333;
+        --color-accent: #f87171; /* red-400 */
+        --color-chart-1: #dc2626;
+        --color-chart-2: #f87171;
+        --color-chart-3: #ef4444;
+      }
+
+      [data-theme="oceanic"] {
+        --bg-gradient: linear-gradient(135deg, #093028 0%, #237A57 100%);
+        --color-primary: #0d9488; /* teal-600 */
+        --color-primary-hover: #2dd4bf; /* teal-400 */
+        --color-secondary: #237A57;
+        --color-accent: #5eead4; /* teal-300 */
+        --color-chart-1: #0d9488;
+        --color-chart-2: #5eead4;
+        --color-chart-3: #2dd4bf;
+      }
+
       body {
         background: var(--bg-gradient);
         background-attachment: fixed;
@@ -116,6 +149,7 @@
         }
       }
     </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
     <script>
       // Apply theme from localStorage immediately
       const savedAppTheme = localStorage.getItem('appTheme') || 'stellar';

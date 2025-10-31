@@ -143,29 +143,40 @@ const PlanViewerModal: React.FC<PlanViewerModalProps> = ({ project, onClose }) =
     if (!markerElem) return;
 
     const containerRect = container.getBoundingClientRect();
-    let x = ((e.clientX - containerRect.left - draggedMarkerRef.current.offsetX) / containerRect.width) * 100;
-    let y = ((e.clientY - containerRect.top - draggedMarkerRef.current.offsetY) / containerRect.height) * 100;
+    const markerWidth = markerElem.offsetWidth;
+    const markerHeight = markerElem.offsetHeight;
 
-    const markerWidthPercent = (markerElem.offsetWidth / containerRect.width) * 100;
-    const markerHeightPercent = (markerElem.offsetHeight / containerRect.height) * 100;
+    // Calculate new top-left position in pixels relative to container
+    const newLeftPx = e.clientX - containerRect.left - draggedMarkerRef.current.offsetX;
+    const newTopPx = e.clientY - containerRect.top - draggedMarkerRef.current.offsetY;
+    
+    // Calculate the marker's center based on new top-left
+    const markerCenterX = newLeftPx + markerWidth / 2;
+    const markerCenterY = newTopPx + markerHeight / 2;
+    
+    // Convert center position to percentage
+    let centerXPercent = (markerCenterX / containerRect.width) * 100;
+    let centerYPercent = (markerCenterY / containerRect.height) * 100;
 
-    x = Math.max(0, Math.min(x, 100 - markerWidthPercent));
-    y = Math.max(0, Math.min(y, 100 - markerHeightPercent));
-
-    markerElem.style.left = `${x}%`;
-    markerElem.style.top = `${y}%`;
+    // Clamp center position to keep the whole marker within bounds
+    const halfWidthPercent = (markerWidth / 2 / containerRect.width) * 100;
+    const halfHeightPercent = (markerHeight / 2 / containerRect.height) * 100;
+    
+    centerXPercent = Math.max(halfWidthPercent, Math.min(centerXPercent, 100 - halfWidthPercent));
+    centerYPercent = Math.max(halfHeightPercent, Math.min(centerYPercent, 100 - halfHeightPercent));
+    
+    markerElem.style.left = `${centerXPercent}%`;
+    markerElem.style.top = `${centerYPercent}%`;
   }, []);
 
   const handleMouseUp = useCallback(async () => {
     if (!draggedMarkerRef.current) return;
 
     if (draggedMarkerRef.current.hasDragged) {
-      const container = canvasRef.current?.parentElement;
       const markerElem = document.getElementById(`marker-${draggedMarkerRef.current.id}`);
-      if (container && markerElem) {
-        const containerRect = container.getBoundingClientRect();
-        const finalXPercent = (markerElem.offsetLeft / containerRect.width) * 100;
-        const finalYPercent = (markerElem.offsetTop / containerRect.height) * 100;
+      if (markerElem) {
+        const finalXPercent = parseFloat(markerElem.style.left);
+        const finalYPercent = parseFloat(markerElem.style.top);
         
         await db.planMarkers.update(draggedMarkerRef.current.id, {
           x: finalXPercent,

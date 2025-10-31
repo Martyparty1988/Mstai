@@ -1,14 +1,17 @@
 
 import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
 
-type Theme = 'stellar' | 'inferno' | 'cobalt' | 'hunter' | 'carbon';
+type Theme = 'stellar' | 'inferno' | 'cobalt' | 'hunter' | 'carbon' | 'emerald' | 'crimson' | 'oceanic';
 
-export const themesData: { id: Theme; nameKey: 'theme_stellar' | 'theme_inferno' | 'theme_cobalt' | 'theme_hunter' | 'theme_carbon'; colors: string[] }[] = [
+export const themesData: { id: Theme; nameKey: 'theme_stellar' | 'theme_inferno' | 'theme_cobalt' | 'theme_hunter' | 'theme_carbon' | 'theme_emerald' | 'theme_crimson' | 'theme_oceanic'; colors: string[] }[] = [
     { id: 'stellar', nameKey: 'theme_stellar', colors: ['#302b63', '#8a2be2'] },
     { id: 'cobalt', nameKey: 'theme_cobalt', colors: ['#0052D4', '#4364F7'] },
     { id: 'inferno', nameKey: 'theme_inferno', colors: ['#ff7e5f', '#feb47b'] },
     { id: 'hunter', nameKey: 'theme_hunter', colors: ['#5A3F37', '#2C7744'] },
     { id: 'carbon', nameKey: 'theme_carbon', colors: ['#434343', '#ef4444'] },
+    { id: 'emerald', nameKey: 'theme_emerald', colors: ['#2C5364', '#10b981'] },
+    { id: 'crimson', nameKey: 'theme_crimson', colors: ['#23074d', '#cc5333'] },
+    { id: 'oceanic', nameKey: 'theme_oceanic', colors: ['#093028', '#237A57'] },
 ];
 
 interface ThemeContextType {

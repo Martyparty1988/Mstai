@@ -20,13 +20,15 @@ const Login: React.FC = () => {
 
     // Simple hardcoded credentials
     if (isAdminLogin) {
-      if (username === 'admin' and password === 'admin' and adminSecret === 'mstadmin2024') {
+      // Fix: Replaced 'and' with '&&' for logical AND operator.
+      if (username === 'admin' && password === 'admin' && adminSecret === 'mstadmin2024') {
         login({ username: 'admin', role: 'admin' });
       } else {
         setError(t('login_error'));
       }
     } else {
-      if (username === 'user' and password === 'user') {
+      // Fix: Replaced 'and' with '&&' for logical AND operator.
+      if (username === 'user' && password === 'user') {
         login({ username: 'user', role: 'user' });
       } else {
         setError(t('login_error'));
