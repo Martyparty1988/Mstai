@@ -1,6 +1,4 @@
 
-
-
 export const locales = {
   en: {
     login: 'Login',
@@ -205,15 +203,25 @@ export const locales = {
     analysis_result: 'Analysis Result',
     analysis_will_appear_here: 'Your analysis will appear here.',
     image_analyzer_error_no_input: 'Please upload an image and enter a prompt.',
-    // Fix: Add missing keys for ImageEditor component.
+    redraw_plan_with_ai: 'Redraw Plan with AI',
+    processing_plan: 'Processing Plan...',
+    redraw_plan_desc: 'Let AI create a simplified version of your plan for easier interaction.',
+    
+    // Fix: Added missing i18n keys for Image Editor and Generator components.
     image_editor: 'AI Image Editor',
-    prompt_placeholder: 'e.g., "Add a futuristic helmet to the person."',
+    prompt_placeholder: 'e.g., "Add a futuristic helmet to the person"',
     processing_image: 'Processing...',
     generate: 'Generate',
     original_image: 'Original Image',
     upload_prompt: 'Drag & drop or upload an image to edit.',
     upload_image: 'Upload Image',
     edited_image: 'Edited Image',
+    image_generator: 'AI Image Generator',
+    prompt_placeholder_generator: 'e.g., "A photo of an astronaut riding a horse on Mars"',
+    aspect_ratio: 'Aspect Ratio',
+    generating_image: 'Generating...',
+    generate_image: 'Generate Image',
+    image_will_appear_here: 'Your generated image will appear here.',
   },
   cs: {
     login: 'Přihlásit se',
@@ -418,14 +426,23 @@ export const locales = {
     analysis_result: 'Výsledek analýzy',
     analysis_will_appear_here: 'Vaše analýza se zobrazí zde.',
     image_analyzer_error_no_input: 'Nahrajte prosím obrázek a zadejte dotaz.',
-    // Fix: Add missing keys for ImageEditor component.
-    image_editor: 'AI Editor Obrázků',
-    prompt_placeholder: 'např. "Přidej osobě futuristickou helmu."',
+    redraw_plan_with_ai: 'Překreslit plán s AI',
+    processing_plan: 'Zpracovávám plán...',
+    redraw_plan_desc: 'Nechte AI vytvořit zjednodušenou verzi vašeho plánu pro snazší interakci.',
+    // Fix: Added missing i18n keys for Image Editor and Generator components.
+    image_editor: 'AI Editor obrázků',
+    prompt_placeholder: 'např. "Přidej osobě futuristickou helmu"',
     processing_image: 'Zpracovávám...',
     generate: 'Generovat',
     original_image: 'Původní obrázek',
     upload_prompt: 'Přetáhněte nebo nahrajte obrázek k úpravě.',
     upload_image: 'Nahrát obrázek',
     edited_image: 'Upravený obrázek',
+    image_generator: 'AI Generátor obrázků',
+    prompt_placeholder_generator: 'např. "Fotka astronauta jedoucího na koni na Marsu"',
+    aspect_ratio: 'Poměr stran',
+    generating_image: 'Generuji...',
+    generate_image: 'Generovat obrázek',
+    image_will_appear_here: 'Váš vygenerovaný obrázek se zobrazí zde.',
   },
 };

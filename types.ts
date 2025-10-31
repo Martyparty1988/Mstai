@@ -14,6 +14,7 @@ export interface Project {
   // Fix: Changed type from Blob to File to correctly type the plan document,
   // which includes properties like `name`.
   planFile?: File;
+  aiPlanFile?: File;
 }
 
 export interface TimeRecord {

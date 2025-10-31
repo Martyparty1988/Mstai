@@ -191,6 +191,7 @@ const Plan: React.FC = () => {
     const [planStatus, setPlanStatus] = useState<'idle' | 'loading' | 'error' | 'loaded' | 'no-plan'>('idle');
     const [zoom, setZoom] = useState(1);
     const draggedMarkerRef = useRef<{ id: number; table: SolarTable; offsetX: number; offsetY: number; hasDragged: boolean } | null>(null);
+    const [aiPlanUrl, setAiPlanUrl] = useState<string | null>(null);
 
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const renderTaskRef = useRef<any>(null);
@@ -270,35 +271,41 @@ const Plan: React.FC = () => {
     }, [zoom]);
 
     useEffect(() => {
-        if (!selectedProject) {
-            setPlanStatus(selectedProjectId ? 'loading' : 'idle');
-            setPdfDoc(null);
-            return;
+        // Cleanup previous state when project changes
+        setAiPlanUrl(null);
+        setPdfDoc(null);
+        setPlanStatus(selectedProjectId ? 'loading' : 'idle');
+    
+        if (!selectedProject) return;
+
+        // Prioritize AI-redrawn plan
+        if (selectedProject.aiPlanFile) {
+            const url = URL.createObjectURL(selectedProject.aiPlanFile);
+            setAiPlanUrl(url);
+            setPlanStatus('loaded');
+            return () => URL.revokeObjectURL(url);
         }
     
-        if (!selectedProject.planFile) {
+        // Fallback to original PDF
+        if (selectedProject.planFile) {
+            const loadPdf = async () => {
+                const arrayBuffer = await selectedProject.planFile!.arrayBuffer();
+                const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+                try {
+                    const pdf = await loadingTask.promise;
+                    setPdfDoc(pdf);
+                    setTotalPages(pdf.numPages);
+                    setPageNum(1);
+                    setPlanStatus('loaded');
+                } catch (error) {
+                    console.error("Failed to load PDF:", error);
+                    setPlanStatus('error');
+                }
+            };
+            loadPdf();
+        } else {
             setPlanStatus('no-plan');
-            setPdfDoc(null);
-            return;
         }
-    
-        setPlanStatus('loading');
-        const loadPdf = async () => {
-            const arrayBuffer = await selectedProject.planFile!.arrayBuffer();
-            const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
-            try {
-                const pdf = await loadingTask.promise;
-                setPdfDoc(pdf);
-                setTotalPages(pdf.numPages);
-                setPageNum(1); // Reset to first page on new PDF
-                setPlanStatus('loaded');
-            } catch (error) {
-                console.error("Failed to load PDF:", error);
-                setPlanStatus('error');
-            }
-        };
-    
-        loadPdf();
     
         return () => {
             if (renderTaskRef.current) {
@@ -308,10 +315,10 @@ const Plan: React.FC = () => {
     }, [selectedProject, selectedProjectId]);
     
     useEffect(() => {
-        if (planStatus === 'loaded' && pdfDoc) {
+        if (planStatus === 'loaded' && pdfDoc && !aiPlanUrl) {
             renderPage(pdfDoc, pageNum);
         }
-    }, [planStatus, pdfDoc, pageNum, renderPage]);
+    }, [planStatus, pdfDoc, pageNum, renderPage, aiPlanUrl]);
 
     const handlePlanClick = (e: React.MouseEvent<HTMLDivElement>) => {
         if ((e.target as HTMLElement).closest('[id^="marker-"]')) return;
@@ -400,12 +407,11 @@ const Plan: React.FC = () => {
         const firstWorkerId = tableIdToFirstWorkerIdMap.get(table.id!);
         const workload = firstWorkerId ? workerWorkload.get(firstWorkerId) || 1 : 1;
         
-        // Base size and scale factor for workload visualization
+        // Base size and more pronounced scale factor for workload visualization
         const baseSize = 28;
-        const scale = 1 + Math.log1p(workload - 1) * 0.2; // Logarithmic scale to prevent huge markers
+        const scale = 1 + Math.log1p(workload) * 0.4;
         const scaledSize = baseSize * scale;
 
-        // Base color - moved up to be used in boxShadow
         let backgroundColor = '#6b7280'; // Gray for unassigned
         if (firstWorkerId) {
             backgroundColor = getWorkerColor(firstWorkerId);
@@ -422,8 +428,8 @@ const Plan: React.FC = () => {
             fontWeight: 'bold',
             transition: 'all 0.2s ease-in-out',
             opacity: table.status === 'completed' ? 0.65 : 1,
-            // Enhanced shadow to show workload intensity with a glow effect
-            boxShadow: `0 2px 8px rgba(0, 0, 0, 0.5), 0 0 ${Math.min(workload * 1.5, 20)}px ${backgroundColor}`,
+            // More intense shadow/glow to show workload intensity
+            boxShadow: `0 2px 10px rgba(0, 0, 0, 0.6), 0 0 ${Math.min(workload * 3, 35)}px ${backgroundColor}`,
             border: '2px solid white',
             width: `${scaledSize}px`,
             height: `${scaledSize}px`,
@@ -448,31 +454,42 @@ const Plan: React.FC = () => {
         if (planStatus === 'error') return <p className="text-center text-red-400 font-bold">{t('plan_load_error')}</p>;
         if (planStatus === 'no-plan') return <p className="text-center text-gray-400 font-bold">{t('no_plan_available')}</p>;
         
+        const markers = tables?.map(table => {
+            const assignmentCount = assignmentCountMap.get(table.id!) || 0;
+            return (
+                <div
+                    key={table.id}
+                    id={`marker-${table.id!}`}
+                    style={{ left: `${table.x}%`, top: `${table.y}%`, ...getTableMarkerStyle(table) }}
+                    onMouseDown={(e) => handleMarkerMouseDown(e, table)}
+                    title={`${table.tableCode} (${t(table.status)})`}
+                    className="active:cursor-grabbing"
+                >
+                    <span className="text-[10px] pointer-events-none">
+                        {table.tableCode.split(/[-.]/).pop()}
+                    </span>
+                        {assignmentCount > 0 && (
+                        <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center border-2 border-white shadow-md">
+                            {assignmentCount}
+                        </span>
+                    )}
+                </div>
+            );
+        });
+
+        if (aiPlanUrl) {
+            return (
+                <>
+                    <img src={aiPlanUrl} alt={t('plan_preview')} className="max-w-full max-h-full object-contain" />
+                    {markers}
+                </>
+            );
+        }
+
         return (
             <>
                 <canvas ref={canvasRef} className="rounded-md shadow-lg" />
-                {tables?.map(table => {
-                    const assignmentCount = assignmentCountMap.get(table.id!) || 0;
-                    return (
-                        <div
-                            key={table.id}
-                            id={`marker-${table.id!}`}
-                            style={{ left: `${table.x}%`, top: `${table.y}%`, ...getTableMarkerStyle(table) }}
-                            onMouseDown={(e) => handleMarkerMouseDown(e, table)}
-                            title={`${table.tableCode} (${t(table.status)})`}
-                            className="active:cursor-grabbing"
-                        >
-                            <span className="text-[10px] pointer-events-none">
-                                {table.tableCode.split(/[-.]/).pop()}
-                            </span>
-                             {assignmentCount > 0 && (
-                                <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center border-2 border-white shadow-md">
-                                    {assignmentCount}
-                                </span>
-                            )}
-                        </div>
-                    );
-                })}
+                {markers}
             </>
         );
     };
@@ -494,7 +511,7 @@ const Plan: React.FC = () => {
                     </select>
                     {selectedProjectId && view === 'plan' && planStatus === 'loaded' && (
                         <div className="flex items-center gap-4 flex-wrap">
-                             {totalPages > 1 && (
+                             {totalPages > 1 && !aiPlanUrl && (
                                 <div className="flex items-center gap-2">
                                     <button onClick={() => setPageNum(p => Math.max(1, p - 1))} disabled={pageNum <= 1} className="px-3 py-2 bg-white/10 text-white font-bold rounded-xl hover:bg-white/20 disabled:opacity-50 transition-colors">‹</button>
                                     <span className="text-white font-bold">{t('page')} {pageNum} / {totalPages}</span>
@@ -521,8 +538,8 @@ const Plan: React.FC = () => {
                  <div className="w-full h-[600px] bg-black/20 backdrop-blur-2xl rounded-3xl border border-white/10 shadow-lg overflow-auto flex justify-center items-start p-2">
                     <div 
                         ref={planContentRef}
-                        className="relative w-fit h-fit"
-                        style={{ cursor: planStatus === 'loaded' ? 'copy' : 'default' }}
+                        className="relative w-fit h-fit transition-transform duration-200"
+                        style={{ cursor: planStatus === 'loaded' ? 'copy' : 'default', transform: `scale(${zoom})` }}
                         onClick={planStatus === 'loaded' ? handlePlanClick : undefined}
                         title={planStatus === 'loaded' ? t('click_plan_to_add_table') : ''}
                     >

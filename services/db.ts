@@ -81,6 +81,12 @@ export class MSTDatabase extends Dexie {
     dbInstance.version(9).stores({
       projectTasks: '++id, projectId',
     });
+
+    // Version 10: Adds aiPlanFile property to projects for AI-redrawn plans.
+    // No migration needed as it's a new, unindexed property.
+    dbInstance.version(10).stores({
+        projects: '++id, name, status',
+    });
   }
 }
 

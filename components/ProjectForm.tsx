@@ -4,7 +4,9 @@ import React, { useState, useEffect } from 'react';
 import { db } from '../services/db';
 import type { Project, ProjectTask } from '../types';
 import { useI18n } from '../contexts/I18nContext';
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI, Modality } from '@google/genai';
+
+declare const pdfjsLib: any;
 
 // Simple markdown parser for task lists
 const parseTaskList = (text: string): string[] => {
@@ -13,6 +15,24 @@ const parseTaskList = (text: string): string[] => {
     .filter(line => line.startsWith('- [ ]') || line.startsWith('* [ ]'))
     .map(line => line.replace(/(-|\*)\s?\[\s?\]\s?/, '').trim());
 };
+
+// Helper to convert base64 to Blob
+const base64ToBlob = (base64: string, contentType = '', sliceSize = 512) => {
+  const byteCharacters = atob(base64);
+  const byteArrays = [];
+
+  for (let offset = 0; offset < byteCharacters.length; offset += sliceSize) {
+    const slice = byteCharacters.slice(offset, offset + sliceSize);
+    const byteNumbers = new Array(slice.length);
+    for (let i = 0; i < slice.length; i++) {
+      byteNumbers[i] = slice.charCodeAt(i);
+    }
+    const byteArray = new Uint8Array(byteNumbers);
+    byteArrays.push(byteArray);
+  }
+
+  return new Blob(byteArrays, {type: contentType});
+}
 
 interface ProjectFormProps {
   project?: Project;
@@ -25,10 +45,12 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ project, onClose }) => {
   const [description, setDescription] = useState('');
   const [status, setStatus] = useState<'active' | 'completed' | 'on-hold'>('active');
   const [planFile, setPlanFile] = useState<File | undefined>(undefined);
+  const [aiPlanFile, setAiPlanFile] = useState<File | undefined>(undefined);
   const [existingFileName, setExistingFileName] = useState<string | null>(null);
 
   const [tasks, setTasks] = useState<Omit<ProjectTask, 'id' | 'projectId'>[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isRedrawing, setIsRedrawing] = useState(false);
 
   useEffect(() => {
     if (project) {
@@ -36,6 +58,7 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ project, onClose }) => {
       setDescription(project.description || '');
       setStatus(project.status);
       setPlanFile(project.planFile);
+      setAiPlanFile(project.aiPlanFile);
       setExistingFileName(project.planFile ? project.planFile.name : null);
     }
   }, [project]);
@@ -44,9 +67,63 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ project, onClose }) => {
     const file = e.target.files?.[0];
     if (file && file.type === 'application/pdf') {
         setPlanFile(file);
+        setAiPlanFile(undefined); // Reset AI plan if original changes
         setExistingFileName(file.name);
     } else {
         alert("Please select a valid PDF file.");
+    }
+  };
+
+  const handleRedrawPlan = async () => {
+    if (!planFile) return;
+    setIsRedrawing(true);
+
+    try {
+        if (!process.env.API_KEY) throw new Error("API key not set");
+
+        const arrayBuffer = await planFile.arrayBuffer();
+        const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+        const pdf = await loadingTask.promise;
+        const page = await pdf.getPage(1);
+        const viewport = page.getViewport({ scale: 1.5 });
+
+        const canvas = document.createElement('canvas');
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        const context = canvas.getContext('2d');
+        
+        await page.render({ canvasContext: context, viewport }).promise;
+        const imageDataUrl = canvas.toDataURL('image/jpeg');
+        const base64Data = imageDataUrl.split(',')[1];
+
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash-image',
+            contents: {
+                parts: [
+                    { inlineData: { data: base64Data, mimeType: 'image/jpeg' } },
+                    { text: "Redraw this architectural site plan. Trace only the main structural lines, boundaries, and table layouts. Keep the background white and use simple black lines. Remove all text, dimensions, and annotations to create a clean, simplified diagram." }
+                ],
+            },
+            config: { responseModalities: [Modality.IMAGE] },
+        });
+
+        const imagePart = response.candidates?.[0]?.content?.parts?.[0];
+        if (imagePart?.inlineData) {
+            const newBase64 = imagePart.inlineData.data;
+            const mimeType = imagePart.inlineData.mimeType;
+            const blob = base64ToBlob(newBase64, mimeType);
+            const newFile = new File([blob], `ai_${planFile.name.replace('.pdf', '.jpg')}`, { type: mimeType });
+            setAiPlanFile(newFile);
+        } else {
+            throw new Error("AI did not return an image.");
+        }
+
+    } catch (err) {
+        console.error(err);
+        alert(t('ai_response_error'));
+    } finally {
+        setIsRedrawing(false);
     }
   };
 
@@ -58,7 +135,8 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ project, onClose }) => {
       name,
       description,
       status,
-      planFile: planFile,
+      planFile,
+      aiPlanFile,
     };
 
     try {
@@ -184,6 +262,20 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ project, onClose }) => {
                 {existingFileName && <p className="text-sm text-green-400 pt-2">{existingFileName}</p>}
               </div>
             </div>
+             {planFile && (
+                <div className="mt-4">
+                    <button
+                        type="button"
+                        onClick={handleRedrawPlan}
+                        disabled={isRedrawing}
+                        className="w-full flex justify-center items-center gap-2 px-6 py-3 bg-cyan-600/80 text-white font-bold rounded-xl hover:bg-cyan-600 transition-all shadow-md text-lg disabled:opacity-50"
+                    >
+                        {isRedrawing ? t('processing_plan') : t('redraw_plan_with_ai')}
+                    </button>
+                    {aiPlanFile && <p className="text-sm text-green-400 pt-2 text-center">AI plan generated: {aiPlanFile.name}</p>}
+                    <p className="text-xs text-gray-400 mt-2 text-center">{t('redraw_plan_desc')}</p>
+                </div>
+            )}
           </div>
           <div className="flex justify-end space-x-4 pt-4">
             <button
