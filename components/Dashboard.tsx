@@ -355,7 +355,7 @@ const Dashboard: React.FC = () => {
 
     return (
         <div>
-            <h1 className="text-5xl font-bold mb-8 cursor-pointer text-white [text-shadow:0_4px_12px_rgba(0,0,0,0.5)]" onClick={handleTitleClick} title="Secret Admin Login">
+            <h1 className="text-4xl md:text-5xl font-bold mb-8 cursor-pointer text-white [text-shadow:0_4px_12px_rgba(0,0,0,0.5)]" onClick={handleTitleClick} title="Secret Admin Login">
                 {t('dashboard')}
             </h1>
             
@@ -373,35 +373,4 @@ const Dashboard: React.FC = () => {
                 <h2 className="text-3xl font-bold mb-6 text-white [text-shadow:0_1px_2px_rgba(0,0,0,0.5)]">{t('performance_overview')}</h2>
                 {data.length > 0 ? (
                     <ResponsiveContainer width="100%" height={400}>
-                        <BarChart
-                            data={data}
-                            margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
-                        >
-                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255, 255, 255, 0.2)" />
-                            <XAxis dataKey="name" stroke="rgba(255, 255, 255, 0.8)" tick={{ fontSize: 14, fontWeight: 'bold' }} />
-                            <YAxis stroke="rgba(255, 255, 255, 0.8)" tick={{ fontSize: 14, fontWeight: 'bold' }} />
-                            <Tooltip
-                                contentStyle={{
-                                    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-                                    borderColor: 'rgba(255, 255, 255, 0.2)',
-                                    color: '#fff',
-                                    borderRadius: '1rem',
-                                    padding: '1rem',
-                                    fontWeight: 'bold',
-                                }}
-                            />
-                            <Legend wrapperStyle={{color: '#fff', fontWeight: 'bold', paddingTop: '20px'}}/>
-                            <Bar dataKey={t('hours_worked')} fill="var(--color-primary)" radius={[10, 10, 0, 0]} />
-                        </BarChart>
-                    </ResponsiveContainer>
-                ) : (
-                    <p className="text-center text-gray-300 py-12 text-lg">{t('no_data')}</p>
-                )}
-            </div>
-
-            {showAdminLogin && <AdminLoginModal onClose={handleCloseModal} />}
-        </div>
-    );
-};
-
-export default Dashboard;
+                        <Bar

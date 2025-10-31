@@ -56,8 +56,8 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       {/* Sidebar */}
       <aside className={`fixed md:relative z-30 w-72 bg-black/10 backdrop-blur-2xl shadow-2xl border-r border-white/10 transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 transition-transform duration-300 ease-in-out`}>
         <div className="flex flex-col h-full safe-sidebar-padding">
-            <div className="flex items-center justify-center h-24 border-b border-white/10 flex-shrink-0">
-                <h1 className="text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-[var(--color-accent)] [text-shadow:0_2px_8px_rgba(0,0,0,0.5)] tracking-wider">MST</h1>
+            <div className="flex items-center justify-center h-20 md:h-24 border-b border-white/10 flex-shrink-0">
+                <h1 className="text-3xl sm:text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-[var(--color-accent)] [text-shadow:0_2px_8px_rgba(0,0,0,0.5)] tracking-wider">MST</h1>
             </div>
             <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto">
                 {navItems.map(item => (
@@ -107,7 +107,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
-        <header className="flex justify-between items-center h-24 bg-black/10 backdrop-blur-xl border-b border-white/10 header-safe-area">
+        <header className="flex justify-between items-center h-20 md:h-24 bg-black/10 backdrop-blur-xl border-b border-white/10 header-safe-area">
           <button onClick={() => setSidebarOpen(true)} className="md:hidden text-gray-200 p-2">
             <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
           </button>

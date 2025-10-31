@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useI18n } from '../contexts/I18nContext';
@@ -21,13 +20,13 @@ const Login: React.FC = () => {
 
     // Simple hardcoded credentials
     if (isAdminLogin) {
-      if (username === 'admin' && password === 'admin' && adminSecret === 'mstadmin2024') {
+      if (username === 'admin' and password === 'admin' and adminSecret === 'mstadmin2024') {
         login({ username: 'admin', role: 'admin' });
       } else {
         setError(t('login_error'));
       }
     } else {
-      if (username === 'user' && password === 'user') {
+      if (username === 'user' and password === 'user') {
         login({ username: 'user', role: 'user' });
       } else {
         setError(t('login_error'));
@@ -40,12 +39,12 @@ const Login: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen w-full flex items-center justify-center bg-cover bg-center bg-no-repeat" style={{ backgroundImage: `url(https://picsum.photos/1920/1080)` }}>
+    <div className="min-h-screen w-full flex items-center justify-center bg-cover bg-center bg-no-repeat p-4" style={{ backgroundImage: `url(https://picsum.photos/1920/1080)` }}>
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm"></div>
       <div className="relative w-full max-w-md p-8 space-y-8 bg-white/10 dark:bg-black/20 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/20">
         <div className="text-center">
           <div onClick={handleLogoClick} className="cursor-pointer inline-block" title="Secret Admin Login">
-             <h1 className="text-5xl font-bold text-white tracking-wider" style={{ textShadow: '0 0 10px rgba(255,255,255,0.5)' }}>MST</h1>
+             <h1 className="text-4xl sm:text-5xl font-bold text-white tracking-wider" style={{ textShadow: '0 0 10px rgba(255,255,255,0.5)' }}>MST</h1>
              <p className="text-white/80">Martyho Solar Tracker</p>
           </div>
         </div>
