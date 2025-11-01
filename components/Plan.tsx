@@ -40,6 +40,7 @@ const TableManagementModal: React.FC<TableManagementModalProps> = ({ table, coor
     const [tableType, setTableType] = useState<'small' | 'medium' | 'large' | null>(null);
     const [status, setStatus] = useState<'pending' | 'completed'>('pending');
     const [workerToAssign, setWorkerToAssign] = useState<number | ''>('');
+    const [codeError, setCodeError] = useState<string | null>(null);
 
     const assignments = useLiveQuery(() => table ? db.tableAssignments.where('tableId').equals(table.id!).toArray() : undefined, [table?.id]);
     const allWorkers = useLiveQuery(() => db.workers.toArray());
@@ -56,9 +57,18 @@ const TableManagementModal: React.FC<TableManagementModalProps> = ({ table, coor
         }
     }, [table]);
 
+    const validateTableCode = useCallback((code: string) => {
+        if (code && !getTableType(code)) {
+            setCodeError(t('table_code_invalid'));
+        } else {
+            setCodeError(null);
+        }
+    }, [t]);
+
     useEffect(() => {
         setTableType(getTableType(tableCode));
-    }, [tableCode]);
+        validateTableCode(tableCode);
+    }, [tableCode, validateTableCode]);
 
     const handleAssignWorker = async () => {
         if (!table?.id || !workerToAssign) return;
@@ -77,8 +87,10 @@ const TableManagementModal: React.FC<TableManagementModalProps> = ({ table, coor
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         const derivedType = getTableType(tableCode);
-        if (!derivedType) {
-            alert(t('table_code_invalid'));
+        
+        // Re-validate on submit to catch empty required field or other errors
+        if (!tableCode || !derivedType) {
+            setCodeError(t('table_code_invalid'));
             return;
         }
 
@@ -112,7 +124,7 @@ const TableManagementModal: React.FC<TableManagementModalProps> = ({ table, coor
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 backdrop-blur-lg p-4">
             <div className="w-full max-w-lg p-8 bg-black/20 backdrop-blur-2xl rounded-3xl shadow-xl border border-white/10 max-h-[90vh] overflow-y-auto">
                 <h2 className="text-3xl font-bold mb-6 text-white">{table ? t('edit_table') : t('add_table')}</h2>
-                <form onSubmit={handleSubmit} className="space-y-6">
+                <form onSubmit={handleSubmit} noValidate className="space-y-6">
                     <div>
                         <label htmlFor="tableCode" className="block text-lg font-medium text-gray-300 mb-2">{t('table_code')}</label>
                         <input
@@ -122,9 +134,12 @@ const TableManagementModal: React.FC<TableManagementModalProps> = ({ table, coor
                             onChange={(e) => setTableCode(e.target.value)}
                             placeholder={t('table_code_placeholder')}
                             required
-                            className="mt-1 block w-full p-4 bg-black/20 text-white placeholder-gray-400 border border-white/20 rounded-xl focus:ring-blue-400 focus:border-blue-400 text-lg"
+                            className={`mt-1 block w-full p-4 bg-black/20 text-white placeholder-gray-400 border rounded-xl focus:ring-blue-400 focus:border-blue-400 text-lg ${codeError ? 'border-red-500' : 'border-white/20'}`}
+                            aria-invalid={!!codeError}
+                            aria-describedby="table-code-error"
                         />
-                        {tableCode && <p className="text-sm text-gray-400 mt-2">{t('table_type')}: <span className="font-bold text-white">{tableType ? t(tableType) : 'N/A'}</span></p>}
+                        {codeError && <p id="table-code-error" className="text-sm text-red-400 mt-2">{codeError}</p>}
+                        {tableCode && !codeError && <p className="text-sm text-gray-400 mt-2">{t('table_type')}: <span className="font-bold text-white">{tableType ? t(tableType) : 'N/A'}</span></p>}
                     </div>
 
                     {table && (

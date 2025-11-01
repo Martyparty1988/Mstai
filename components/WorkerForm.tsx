@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { db } from '../services/db';
 import type { Worker } from '../types';
 import { useI18n } from '../contexts/I18nContext';
+import { useAuth } from '../contexts/AuthContext';
 
 interface WorkerFormProps {
   worker?: Worker;
@@ -10,6 +11,7 @@ interface WorkerFormProps {
 
 const WorkerForm: React.FC<WorkerFormProps> = ({ worker, onClose }) => {
   const { t } = useI18n();
+  const { user } = useAuth();
   const [name, setName] = useState('');
   const [hourlyRate, setHourlyRate] = useState('0');
 
@@ -27,7 +29,7 @@ const WorkerForm: React.FC<WorkerFormProps> = ({ worker, onClose }) => {
     e.preventDefault();
     const workerData: Omit<Worker, 'id'> = {
       name,
-      hourlyRate: Number(hourlyRate) || 0,
+      hourlyRate: user?.role === 'admin' ? (Number(hourlyRate) || 0) : (worker?.hourlyRate ?? 0),
       createdAt: worker?.createdAt || new Date(),
     };
 
@@ -55,19 +57,21 @@ const WorkerForm: React.FC<WorkerFormProps> = ({ worker, onClose }) => {
               className="mt-1 block w-full p-4 bg-black/20 text-white placeholder-gray-400 border border-white/20 rounded-xl focus:ring-blue-400 focus:border-blue-400 text-lg"
             />
           </div>
-          <div>
-            <label htmlFor="hourlyRate" className="block text-lg font-medium text-gray-300 mb-2">{t('hourly_rate')}</label>
-            <input
-              type="number"
-              id="hourlyRate"
-              value={hourlyRate}
-              onChange={(e) => setHourlyRate(e.target.value)}
-              required
-              step="0.01"
-              min="0"
-              className="mt-1 block w-full p-4 bg-black/20 text-white placeholder-gray-400 border border-white/20 rounded-xl focus:ring-blue-400 focus:border-blue-400 text-lg"
-            />
-          </div>
+          {user?.role === 'admin' && (
+            <div>
+              <label htmlFor="hourlyRate" className="block text-lg font-medium text-gray-300 mb-2">{t('hourly_rate')}</label>
+              <input
+                type="number"
+                id="hourlyRate"
+                value={hourlyRate}
+                onChange={(e) => setHourlyRate(e.target.value)}
+                required
+                step="0.01"
+                min="0"
+                className="mt-1 block w-full p-4 bg-black/20 text-white placeholder-gray-400 border border-white/20 rounded-xl focus:ring-blue-400 focus:border-blue-400 text-lg"
+              />
+            </div>
+          )}
           <div className="flex justify-end space-x-4 pt-4">
             <button
               type="button"

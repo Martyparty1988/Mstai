@@ -8,7 +8,8 @@ type LocaleKeys = keyof typeof locales.en;
 interface I18nContextType {
   language: Language;
   setLanguage: (lang: Language) => void;
-  t: (key: LocaleKeys) => string;
+  // FIX: Updated `t` function signature to support placeholder replacements.
+  t: (key: LocaleKeys, replacements?: Record<string, string | number>) => string;
 }
 
 const I18nContext = createContext<I18nContextType | undefined>(undefined);
@@ -24,8 +25,16 @@ export const I18nProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setLanguage(lang);
   };
 
-  const t = useMemo(() => (key: LocaleKeys): string => {
-    return locales[language][key] || key;
+  // FIX: Updated `t` function to handle placeholder replacements (e.g., {name}).
+  const t = useMemo(() => (key: LocaleKeys, replacements?: Record<string, string | number>): string => {
+    let translation = locales[language][key] || String(key);
+    if (replacements) {
+        Object.keys(replacements).forEach(rKey => {
+            const regex = new RegExp(`\\{${rKey}\\}`, 'g');
+            translation = translation.replace(regex, String(replacements[rKey]));
+        });
+    }
+    return translation;
   }, [language]);
 
   return (

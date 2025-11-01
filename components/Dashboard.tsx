@@ -12,6 +12,7 @@ import AdminLoginModal from './AdminLoginModal';
 import type { Worker, Project, AttendanceSession, TimeRecord } from '../types';
 import AIInsights from './AIInsights';
 import { processRecordDescription } from '../services/recordProcessor';
+import AICommandBar from './AICommandBar';
 
 // --- Clock-out Modal ---
 interface ClockOutModalProps {
@@ -361,7 +362,7 @@ const Dashboard: React.FC = () => {
     );
 
     return (
-        <div>
+        <div className="pb-24">
             <h1 className="text-4xl md:text-5xl font-bold mb-8 cursor-pointer text-white [text-shadow:0_4px_12px_rgba(0,0,0,0.5)]" onClick={handleTitleClick} title="Secret Admin Login">
                 {t('dashboard')}
             </h1>
@@ -403,6 +404,7 @@ const Dashboard: React.FC = () => {
                 )}
             </div>
             {showAdminLogin && <AdminLoginModal onClose={handleCloseModal} />}
+            <AICommandBar />
         </div>
     );
 };

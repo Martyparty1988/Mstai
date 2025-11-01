@@ -4,9 +4,11 @@ import { db } from '../services/db';
 import { useI18n } from '../contexts/I18nContext';
 import type { Worker } from '../types';
 import WorkerForm from './WorkerForm';
+import { useAuth } from '../contexts/AuthContext';
 
 const Workers: React.FC = () => {
   const { t } = useI18n();
+  const { user } = useAuth();
   const [showForm, setShowForm] = useState(false);
   const [selectedWorker, setSelectedWorker] = useState<Worker | undefined>(undefined);
   const [searchTerm, setSearchTerm] = useState('');
@@ -66,7 +68,9 @@ const Workers: React.FC = () => {
               <tr>
                 <th scope="col" className="px-6 py-4 text-left text-sm font-bold text-gray-200 uppercase tracking-wider">ID</th>
                 <th scope="col" className="px-6 py-4 text-left text-sm font-bold text-gray-200 uppercase tracking-wider">{t('worker_name')}</th>
-                <th scope="col" className="px-6 py-4 text-left text-sm font-bold text-gray-200 uppercase tracking-wider">{t('hourly_rate')}</th>
+                {user?.role === 'admin' && (
+                  <th scope="col" className="px-6 py-4 text-left text-sm font-bold text-gray-200 uppercase tracking-wider">{t('hourly_rate')}</th>
+                )}
                 <th scope="col" className="relative px-6 py-4"><span className="sr-only">Actions</span></th>
               </tr>
             </thead>
@@ -75,7 +79,9 @@ const Workers: React.FC = () => {
                 <tr key={worker.id} className="hover:bg-white/10 transition-colors">
                   <td className="px-6 py-5 whitespace-nowrap text-lg font-medium text-white">{worker.id}</td>
                   <td className="px-6 py-5 whitespace-nowrap text-lg text-gray-200">{worker.name}</td>
-                  <td className="px-6 py-5 whitespace-nowrap text-lg text-gray-200">{worker.hourlyRate}</td>
+                  {user?.role === 'admin' && (
+                    <td className="px-6 py-5 whitespace-nowrap text-lg text-gray-200">{worker.hourlyRate}</td>
+                  )}
                   <td className="px-6 py-5 whitespace-nowrap text-right text-lg font-bold space-x-6">
                     <button onClick={() => handleEdit(worker)} className="text-blue-400 hover:underline">{t('edit_worker')}</button>
                     <button onClick={() => handleDelete(worker.id!)} className="text-pink-500 hover:underline">{t('delete')}</button>
