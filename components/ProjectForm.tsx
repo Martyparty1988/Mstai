@@ -1,10 +1,8 @@
-
-
 import React, { useState, useEffect } from 'react';
 import { db } from '../services/db';
-import type { Project, ProjectTask } from '../types';
+import type { Project, ProjectTask, ProjectComponent, SolarTable } from '../types';
 import { useI18n } from '../contexts/I18nContext';
-import { GoogleGenAI, Modality } from '@google/genai';
+import { GoogleGenAI, Modality, Type } from '@google/genai';
 
 declare const pdfjsLib: any;
 
@@ -49,8 +47,15 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ project, onClose }) => {
   const [existingFileName, setExistingFileName] = useState<string | null>(null);
 
   const [tasks, setTasks] = useState<Omit<ProjectTask, 'id' | 'projectId'>[]>([]);
+  const [components, setComponents] = useState<Omit<ProjectComponent, 'id' | 'projectId'>[]>([]);
+  const [foundTables, setFoundTables] = useState<Omit<SolarTable, 'id' | 'projectId' | 'status'>[]>([]);
+
   const [isGenerating, setIsGenerating] = useState(false);
   const [isRedrawing, setIsRedrawing] = useState(false);
+  const [isAnalyzingLegend, setIsAnalyzingLegend] = useState(false);
+  const [isAnalyzingTables, setIsAnalyzingTables] = useState(false);
+  const [analysisMessage, setAnalysisMessage] = useState('');
+
 
   useEffect(() => {
     if (project) {
@@ -60,6 +65,12 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ project, onClose }) => {
       setPlanFile(project.planFile);
       setAiPlanFile(project.aiPlanFile);
       setExistingFileName(project.planFile ? project.planFile.name : null);
+      
+      const fetchComponents = async () => {
+        const existingComponents = await db.projectComponents.where('projectId').equals(project.id!).toArray();
+        setComponents(existingComponents);
+      };
+      fetchComponents();
     }
   }, [project]);
   
@@ -69,8 +80,166 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ project, onClose }) => {
         setPlanFile(file);
         setAiPlanFile(undefined); // Reset AI plan if original changes
         setExistingFileName(file.name);
+        setFoundTables([]); // Reset found tables on new file
+        setAnalysisMessage('');
     } else {
         alert("Please select a valid PDF file.");
+    }
+  };
+  
+  const handleAnalyzeLegend = async () => {
+    if (!planFile) return;
+    setIsAnalyzingLegend(true);
+    setComponents([]);
+
+    try {
+        if (!process.env.API_KEY) throw new Error("API key not set");
+
+        const arrayBuffer = await planFile.arrayBuffer();
+        const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+        const pdf = await loadingTask.promise;
+        const page = await pdf.getPage(1);
+        const viewport = page.getViewport({ scale: 1.5 });
+
+        const canvas = document.createElement('canvas');
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        const context = canvas.getContext('2d');
+        
+        if (!context) throw new Error("Could not get canvas context");
+        
+        await page.render({ canvasContext: context, viewport }).promise;
+        const imageDataUrl = canvas.toDataURL('image/jpeg');
+        const base64Data = imageDataUrl.split(',')[1];
+
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        const prompt = `Analyze this image of a solar project plan. The original filename is "${planFile.name}".
+        1. From BOTH the filename and the image's title block, determine the main project name (often a city like 'Zarasai') and a short project description (including power capacity, e.g., '14.999MW', if found in the filename).
+        2. Find the legend (it might be labeled 'Sutartiniai ženklai'). Extract all items.
+        3. IMPORTANT: Your final output must be ONLY a valid JSON object. Before generating the final JSON, you MUST translate all extracted text values (projectName, projectDescription, and all component 'name' and 'description' fields) into the Czech language.
+        Return the result as a JSON object with 'projectName', 'projectDescription', and a 'components' array, where each component has 'name' and 'description'.`;
+        
+        const responseSchema = {
+            type: Type.OBJECT,
+            properties: {
+                projectName: { type: Type.STRING, description: 'The main name of the project, often a location.' },
+                projectDescription: { type: Type.STRING, description: 'A short description, including power capacity like "14.999MW".' },
+                components: {
+                    type: Type.ARRAY,
+                    items: {
+                        type: Type.OBJECT,
+                        properties: {
+                            name: { type: Type.STRING },
+                            description: { type: Type.STRING },
+                        },
+                        required: ['name', 'description'],
+                    }
+                }
+            },
+            required: ['projectName', 'projectDescription', 'components'],
+        };
+
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-pro',
+            contents: [{ parts: [{ inlineData: { data: base64Data, mimeType: 'image/jpeg' } }, { text: prompt }] }],
+            config: {
+                responseMimeType: 'application/json',
+                responseSchema,
+            },
+        });
+
+        const resultJson = JSON.parse(response.text);
+
+        if (resultJson.projectName) {
+            setName(resultJson.projectName);
+        }
+        if (resultJson.projectDescription) {
+            setDescription(resultJson.projectDescription);
+        }
+        if (resultJson.components && Array.isArray(resultJson.components)) {
+            setComponents(resultJson.components);
+        }
+        
+        alert(t('legend_analysis_complete'));
+
+    } catch (err) {
+        console.error(err);
+        alert(t('ai_response_error'));
+    } finally {
+        setIsAnalyzingLegend(false);
+    }
+  };
+
+  const handleAnalyzeTables = async () => {
+    if (!planFile) return;
+    setIsAnalyzingTables(true);
+    setFoundTables([]);
+    setAnalysisMessage(t('analyzing_tables'));
+
+    try {
+        if (!process.env.API_KEY) throw new Error("API key not set");
+
+        const arrayBuffer = await planFile.arrayBuffer();
+        const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+        const pdf = await loadingTask.promise;
+        const page = await pdf.getPage(1);
+        const viewport = page.getViewport({ scale: 1.5 });
+
+        const canvas = document.createElement('canvas');
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        const context = canvas.getContext('2d');
+        if (!context) throw new Error("Could not get canvas context");
+        
+        await page.render({ canvasContext: context, viewport }).promise;
+        const imageDataUrl = canvas.toDataURL('image/jpeg');
+        const base64Data = imageDataUrl.split(',')[1];
+
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        const prompt = `You are an expert analyst of solar farm site plans. Your task is to meticulously identify ALL individual solar panel tables in this image.
+        1. Find every table, typically represented as a yellow-bordered rectangle with a number inside or nearby.
+        2. Extract the table's code (the number, e.g., '19', '125.1'). Be extremely careful to not miss codes with decimal points like '.1'.
+        3. Analyze the visual shape and size of each rectangle on the plan to determine its type. Classify it as 'small', 'medium', or 'large' based on its appearance, not its code. Small tables are often close to square, medium are slightly elongated, and large are distinctly rectangular. Use your best judgment to categorize them.
+        4. Determine the center coordinates of each table as percentages from the top and left edges of the image (x and y).
+        Return a JSON array of objects. Each object MUST have 'tableCode' (string), 'tableType' ('small', 'medium', or 'large'), 'x' (number), and 'y' (number).`;
+        
+        const responseSchema = {
+            type: Type.ARRAY,
+            items: {
+                type: Type.OBJECT,
+                properties: {
+                    tableCode: { type: Type.STRING },
+                    tableType: { type: Type.STRING, enum: ['small', 'medium', 'large'] },
+                    x: { type: Type.NUMBER },
+                    y: { type: Type.NUMBER },
+                },
+                required: ['tableCode', 'tableType', 'x', 'y'],
+            }
+        };
+
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-pro',
+            contents: [{ parts: [{ inlineData: { data: base64Data, mimeType: 'image/jpeg' } }, { text: prompt }] }],
+            config: {
+                responseMimeType: 'application/json',
+                responseSchema,
+            },
+        });
+
+        const resultJson = JSON.parse(response.text);
+        
+        if (Array.isArray(resultJson)) {
+            setFoundTables(resultJson);
+            setAnalysisMessage(t('found_tables_count', { count: resultJson.length }));
+        } else {
+            throw new Error("AI did not return a valid array of tables.");
+        }
+
+    } catch (err) {
+        console.error(err);
+        setAnalysisMessage(t('ai_response_error'));
+    } finally {
+        setIsAnalyzingTables(false);
     }
   };
 
@@ -91,6 +260,7 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ project, onClose }) => {
         canvas.width = viewport.width;
         canvas.height = viewport.height;
         const context = canvas.getContext('2d');
+        if (!context) throw new Error("Could not get canvas context");
         
         await page.render({ canvasContext: context, viewport }).promise;
         const imageDataUrl = canvas.toDataURL('image/jpeg');
@@ -99,12 +269,12 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ project, onClose }) => {
         const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash-image',
-            contents: {
+            contents: [{
                 parts: [
                     { inlineData: { data: base64Data, mimeType: 'image/jpeg' } },
                     { text: "Redraw this architectural site plan. Trace only the main structural lines, boundaries, and table layouts. Keep the background white and use simple black lines. Remove all text, dimensions, and annotations to create a clean, simplified diagram." }
                 ],
-            },
+            }],
             config: { responseModalities: [Modality.IMAGE] },
         });
 
@@ -141,17 +311,48 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ project, onClose }) => {
 
     try {
         if (project?.id) {
-          await db.projects.update(project.id, projectData);
+          const projectId = project.id;
+          await db.projects.update(projectId, projectData);
+          
           if (tasks.length > 0) {
-            await db.projectTasks.where('projectId').equals(project.id).delete();
-            const newTasks = tasks.map(t => ({ ...t, projectId: project.id! }));
+            await db.projectTasks.where('projectId').equals(projectId).delete();
+            const newTasks = tasks.map(t => ({ ...t, projectId }));
             await db.projectTasks.bulkAdd(newTasks as ProjectTask[]);
           }
+
+          await db.projectComponents.where('projectId').equals(projectId).delete();
+          if (components.length > 0) {
+            const newComponents = components.map(c => ({ ...c, projectId }));
+            await db.projectComponents.bulkAdd(newComponents as ProjectComponent[]);
+          }
+          
+          if (foundTables.length > 0) {
+              await db.solarTables.where('projectId').equals(projectId).delete();
+              const newTables = foundTables.map(table => ({
+                  ...table,
+                  projectId,
+                  status: 'pending'
+              }));
+              await db.solarTables.bulkAdd(newTables as SolarTable[]);
+          }
+
         } else {
           const newProjectId = await db.projects.add(projectData as Project);
           if (tasks.length > 0) {
             const newTasks = tasks.map(t => ({ ...t, projectId: newProjectId }));
             await db.projectTasks.bulkAdd(newTasks as ProjectTask[]);
+          }
+           if (components.length > 0) {
+            const newComponents = components.map(c => ({ ...c, projectId: newProjectId }));
+            await db.projectComponents.bulkAdd(newComponents as ProjectComponent[]);
+          }
+          if (foundTables.length > 0) {
+              const newTables = foundTables.map(table => ({
+                  ...table,
+                  projectId: newProjectId,
+                  status: 'pending'
+              }));
+              await db.solarTables.bulkAdd(newTables as SolarTable[]);
           }
         }
         onClose();
@@ -263,7 +464,23 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ project, onClose }) => {
               </div>
             </div>
              {planFile && (
-                <div className="mt-4">
+                <div className="mt-4 space-y-4">
+                     <button
+                        type="button"
+                        onClick={handleAnalyzeLegend}
+                        disabled={isAnalyzingLegend}
+                        className="w-full flex justify-center items-center gap-2 px-6 py-3 bg-fuchsia-600/80 text-white font-bold rounded-xl hover:bg-fuchsia-600 transition-all shadow-md text-lg disabled:opacity-50"
+                    >
+                        {isAnalyzingLegend ? t('analyzing_legend') : t('analyze_legend_with_ai')}
+                    </button>
+                    <button
+                        type="button"
+                        onClick={handleAnalyzeTables}
+                        disabled={isAnalyzingTables}
+                        className="w-full flex justify-center items-center gap-2 px-6 py-3 bg-purple-600/80 text-white font-bold rounded-xl hover:bg-purple-600 transition-all shadow-md text-lg disabled:opacity-50"
+                    >
+                        {isAnalyzingTables ? t('analyzing_tables') : t('analyze_tables_with_ai')}
+                    </button>
                     <button
                         type="button"
                         onClick={handleRedrawPlan}
@@ -273,8 +490,16 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ project, onClose }) => {
                         {isRedrawing ? t('processing_plan') : t('redraw_plan_with_ai')}
                     </button>
                     {aiPlanFile && <p className="text-sm text-green-400 pt-2 text-center">AI plan generated: {aiPlanFile.name}</p>}
-                    <p className="text-xs text-gray-400 mt-2 text-center">{t('redraw_plan_desc')}</p>
+                    {analysisMessage && <p className="text-sm text-cyan-300 pt-2 text-center">{analysisMessage}</p>}
                 </div>
+            )}
+            {components.length > 0 && (
+              <div className="mt-4 space-y-2 p-4 bg-black/20 rounded-lg border border-white/10">
+                  <h4 className="font-bold text-gray-200">{t('project_components')}:</h4>
+                  <ul className="list-disc list-inside text-gray-300 max-h-40 overflow-y-auto space-y-1">
+                      {components.map((comp, index) => <li key={index}><strong className="text-white">{comp.name}:</strong> {comp.description}</li>)}
+                  </ul>
+              </div>
             )}
           </div>
           <div className="flex justify-end space-x-4 pt-4">

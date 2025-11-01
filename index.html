@@ -104,6 +104,25 @@
         background-attachment: fixed;
         overscroll-behavior-y: contain; /* Prevents pull-to-refresh for a native feel */
       }
+
+      @keyframes subtle-pulse {
+        0%, 100% {
+          text-shadow: 0 0 20px rgba(255, 255, 255, 0.7);
+          transform: scale(1);
+        }
+        50% {
+          text-shadow: 0 0 30px rgba(255, 255, 255, 1);
+          transform: scale(1.02);
+        }
+      }
+
+      .animate-subtle-pulse {
+        animation: subtle-pulse 4s ease-in-out infinite;
+      }
+
+      .admin-indicator {
+        box-shadow: inset 0 3px 0 0 var(--color-primary);
+      }
       
       @supports (padding-top: env(safe-area-inset-top)) {
         .safe-sidebar-padding {
@@ -172,7 +191,9 @@
     "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
     "dexie": "https://aistudiocdn.com/dexie@^4.2.1",
     "dexie-react-hooks": "https://aistudiocdn.com/dexie-react-hooks@^4.2.0",
-    "@google/genai": "https://aistudiocdn.com/@google/genai@^0.15.0"
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^0.15.0",
+    "xlsx": "https://aistudiocdn.com/xlsx@^0.18.5",
+    "papaparse": "https://aistudiocdn.com/papaparse@^5.4.1"
   }
 }
 </script>

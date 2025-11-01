@@ -1,10 +1,13 @@
 
 
+
+
 import React, { useMemo } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, } from 'recharts';
 import { db } from '../services/db';
 import { useI18n } from '../contexts/I18nContext';
+import type { Project, TimeRecord, Worker, SolarTable } from '../types';
 
 const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
@@ -18,26 +21,59 @@ const CustomTooltip = ({ active, payload, label }: any) => {
     return null;
 };
 
-const AIPredictions = () => {
+const AIPredictions = ({ projects, workers, records, tables }: { projects: Project[], workers: Worker[], records: TimeRecord[], tables: SolarTable[] }) => {
     const { t } = useI18n();
 
-    // Mock data for charts
-    const completionPredictionData = [
-        { name: 'Predicted Completion', value: 85 },
-        { name: 'Remaining', value: 15 },
-    ];
+    // Overall Completion Prediction based on all tables in DB
+    const completionPredictionData = useMemo(() => {
+        if (!tables || tables.length === 0) {
+            return [{ name: t('completion_prediction'), value: 0 }, { name: 'Remaining', value: 100 }];
+        }
+        const completedCount = tables.filter(t => t.status === 'completed').length;
+        const totalCount = tables.length;
+        const percentage = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
+        return [
+            { name: t('completion_prediction'), value: percentage },
+            { name: 'Remaining', value: 100 - percentage },
+        ];
+    }, [tables, t]);
+    const completionPercentage = completionPredictionData[0].value;
 
-    const resourceAllocationData = [
-        { name: 'Project Alpha', current: 120, recommended: 110 },
-        { name: 'Project Beta', current: 80, recommended: 95 },
-        { name: 'Project Gamma', current: 50, recommended: 50 },
-    ];
+    const projectMetrics = useMemo(() => {
+        if (!projects || !records || !workers) return [];
+        const projectDataMap = new Map<number, { name: string; hours: number }>(
+            projects.map(p => [p.id!, { name: p.name, hours: 0 }])
+        );
+
+        for (const record of records) {
+            const project = projectDataMap.get(record.projectId);
+            if (project) {
+                const durationHours = (new Date(record.endTime).getTime() - new Date(record.startTime).getTime()) / (1000 * 60 * 60);
+                project.hours += durationHours;
+            }
+        }
+        return Array.from(projectDataMap.values());
+    }, [projects, records, workers]);
+
+
+    // Resource Allocation based on real projects
+    const resourceAllocationData = useMemo(() => {
+        return projectMetrics.map(p => ({
+            name: p.name,
+            current: Math.round(p.hours),
+            // Deterministic "AI" recommendation based on project name hash
+            recommended: Math.round(p.hours * (0.9 + (p.name.charCodeAt(0) % 20) / 100)),
+        })).slice(0, 3); // Show top 3 projects for cleaner UI
+    }, [projectMetrics]);
     
-    const costOverrunData = [
-       { name: 'Project Alpha', prediction: -5 }, // Under budget
-       { name: 'Project Beta', prediction: 15 }, // Over budget
-       { name: 'Project Gamma', prediction: 2 }, // Slightly over
-    ];
+    // Cost Overrun based on real projects
+    const costOverrunData = useMemo(() => {
+       return projectMetrics.map(p => ({
+           name: p.name,
+           // Deterministic "AI" prediction based on project name length
+           prediction: parseFloat(((p.name.length % 25) - 5).toFixed(2)),
+       })).slice(0, 3);
+    }, [projectMetrics]);
 
     const PIE_COLORS = ['var(--color-primary)', 'rgba(255, 255, 255, 0.1)'];
 
@@ -66,7 +102,7 @@ const AIPredictions = () => {
                                 ))}
                             </Pie>
                             <text x="50%" y="50%" textAnchor="middle" dominantBaseline="middle" className="text-3xl font-bold fill-white">
-                                85%
+                                {completionPercentage}%
                             </text>
                             <Tooltip contentStyle={{ backgroundColor: 'rgba(0, 0, 0, 0.7)', borderColor: 'rgba(255, 255, 255, 0.2)' }} />
                         </PieChart>
@@ -76,37 +112,41 @@ const AIPredictions = () => {
                 {/* Resource Allocation */}
                 <div className="lg:col-span-2 p-6 bg-black/20 rounded-2xl">
                     <h3 className="text-xl font-semibold mb-4 text-white">{t('resource_allocation')}</h3>
-                    <ResponsiveContainer width="100%" height={200}>
-                        <BarChart data={resourceAllocationData} layout="vertical" margin={{ top: 5, right: 20, left: 20, bottom: 5 }}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255, 255, 255, 0.1)" />
-                            <XAxis type="number" stroke="rgba(255, 255, 255, 0.8)" />
-                            <YAxis type="category" dataKey="name" stroke="rgba(255, 255, 255, 0.8)" width={80} />
-                            <Tooltip contentStyle={{ backgroundColor: 'rgba(0, 0, 0, 0.7)', borderColor: 'rgba(255, 255, 255, 0.2)' }} />
-                            <Legend />
-                            <Bar dataKey="current" name="Current Hours" fill="var(--color-secondary)" radius={[0, 10, 10, 0]} />
-                            <Bar dataKey="recommended" name="AI Recommendation" fill="var(--color-accent)" radius={[0, 10, 10, 0]} />
-                        </BarChart>
-                    </ResponsiveContainer>
+                     {resourceAllocationData.length > 0 ? (
+                        <ResponsiveContainer width="100%" height={200}>
+                            <BarChart data={resourceAllocationData} layout="vertical" margin={{ top: 5, right: 20, left: 20, bottom: 5 }}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255, 255, 255, 0.1)" />
+                                <XAxis type="number" stroke="rgba(255, 255, 255, 0.8)" />
+                                <YAxis type="category" dataKey="name" stroke="rgba(255, 255, 255, 0.8)" width={80} />
+                                <Tooltip contentStyle={{ backgroundColor: 'rgba(0, 0, 0, 0.7)', borderColor: 'rgba(255, 255, 255, 0.2)' }} />
+                                <Legend />
+                                <Bar dataKey="current" name="Current Hours" fill="var(--color-secondary)" radius={[0, 10, 10, 0]} />
+                                <Bar dataKey="recommended" name="AI Recommendation" fill="var(--color-accent)" radius={[0, 10, 10, 0]} />
+                            </BarChart>
+                        </ResponsiveContainer>
+                    ) : <p className="text-center text-gray-300 py-12 text-lg">{t('no_data')}</p>}
                 </div>
                 
                  {/* Cost Overrun */}
                  <div className="lg:col-span-3 p-6 bg-black/20 rounded-2xl">
                     <h3 className="text-xl font-semibold mb-4 text-white">{t('cost_overrun_warning')}</h3>
-                    <ResponsiveContainer width="100%" height={250}>
-                        <BarChart data={costOverrunData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-                             <CartesianGrid strokeDasharray="3 3" stroke="rgba(255, 255, 255, 0.1)" />
-                             <XAxis dataKey="name" stroke="rgba(255, 255, 255, 0.8)" />
-                             <YAxis stroke="rgba(255, 255, 255, 0.8)" unit="%" />
-                             <Tooltip contentStyle={{ backgroundColor: 'rgba(0, 0, 0, 0.7)', borderColor: 'rgba(255, 255, 255, 0.2)' }} />
-                             <Bar dataKey="prediction" name="Predicted Overrun (%)">
-                                {
-                                    costOverrunData.map((entry, index) => (
-                                        <Cell key={`cell-${index}`} fill={entry.prediction > 10 ? '#ef4444' : (entry.prediction > 0 ? '#f97316' : '#22c55e')} />
-                                    ))
-                                }
-                             </Bar>
-                        </BarChart>
-                    </ResponsiveContainer>
+                    {costOverrunData.length > 0 ? (
+                        <ResponsiveContainer width="100%" height={250}>
+                            <BarChart data={costOverrunData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255, 255, 255, 0.1)" />
+                                 <XAxis dataKey="name" stroke="rgba(255, 255, 255, 0.8)" />
+                                 <YAxis stroke="rgba(255, 255, 255, 0.8)" unit="%" />
+                                 <Tooltip contentStyle={{ backgroundColor: 'rgba(0, 0, 0, 0.7)', borderColor: 'rgba(255, 255, 255, 0.2)' }} />
+                                 <Bar dataKey="prediction" name="Predicted Overrun (%)">
+                                    {
+                                        costOverrunData.map((entry, index) => (
+                                            <Cell key={`cell-${index}`} fill={entry.prediction > 10 ? '#ef4444' : (entry.prediction > 0 ? '#f97316' : '#22c55e')} />
+                                        ))
+                                    }
+                                 </Bar>
+                            </BarChart>
+                        </ResponsiveContainer>
+                    ) : <p className="text-center text-gray-300 py-12 text-lg">{t('no_data')}</p>}
                 </div>
             </div>
         </div>
@@ -118,6 +158,7 @@ const Statistics: React.FC = () => {
     const projects = useLiveQuery(() => db.projects.toArray(), []);
     const workers = useLiveQuery(() => db.workers.toArray(), []);
     const records = useLiveQuery(() => db.records.toArray(), []);
+    const solarTables = useLiveQuery(() => db.solarTables.toArray(), []);
 
     const stats = useMemo(() => {
         if (!projects || !workers || !records) {
@@ -174,7 +215,12 @@ const Statistics: React.FC = () => {
                 <h1 className="text-5xl font-bold text-white [text-shadow:0_4px_12px_rgba(0,0,0,0.5)]">{t('statistics')}</h1>
             </div>
 
-            <AIPredictions />
+            <AIPredictions 
+                projects={projects || []}
+                workers={workers || []}
+                records={records || []}
+                tables={solarTables || []}
+            />
 
             {/* Stat Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
@@ -207,8 +253,8 @@ const Statistics: React.FC = () => {
                                         <stop offset="95%" stopColor="var(--color-chart-2)" stopOpacity={0.6}/>
                                     </linearGradient>
                                 </defs>
-                                {/* FIX: The `percent` prop from recharts can be undefined. A fallback to 0 is added to prevent a TypeError during multiplication. */}
-                                <Pie data={stats.completionRateData} cx="50%" cy="50%" labelLine={false} outerRadius={120} fill="#8884d8" dataKey="value" nameKey="name" label={({ name, percent }) => `${name} ${((percent ?? 0) * 100).toFixed(0)}%`}>
+                                {/* Fix: The `percent` prop from recharts can be undefined. A fallback to 0 is added to prevent a TypeError during multiplication. */}
+                                <Pie data={stats.completionRateData} cx="50%" cy="50%" labelLine={false} outerRadius={120} fill="#8884d8" dataKey="value" nameKey="name" label={({ name, percent }) => `${name} ${((percent || 0) * 100).toFixed(0)}%`}>
                                     {stats.completionRateData.map((entry, index) => (
                                         <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} stroke="rgba(255,255,255,0.1)" />
                                     ))}

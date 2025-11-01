@@ -1,9 +1,8 @@
-
-const CACHE_NAME = 'mst-cache-v1';
+const CACHE_NAME = 'mst-cache-v2';
 const urlsToCache = [
   '/',
   '/index.html',
-  'https://cdn.tailwindcss.com',
+  // Add other critical assets you want to cache initially
 ];
 
 self.addEventListener('install', event => {
@@ -17,17 +16,28 @@ self.addEventListener('install', event => {
 });
 
 self.addEventListener('fetch', event => {
+  // Use a stale-while-revalidate strategy
   event.respondWith(
-    caches.match(event.request)
-      .then(response => {
-        if (response) {
-          return response;
-        }
-        return fetch(event.request);
-      }
-    )
+    caches.open(CACHE_NAME).then(cache => {
+      return cache.match(event.request).then(response => {
+        const fetchPromise = fetch(event.request).then(networkResponse => {
+          // If we got a valid response, update the cache
+          if (networkResponse && networkResponse.status === 200) {
+            cache.put(event.request, networkResponse.clone());
+          }
+          return networkResponse;
+        }).catch(err => {
+          console.error('Fetch failed:', err);
+          // If fetch fails (e.g., offline), the cached response is still returned if it exists
+        });
+
+        // Return the cached response immediately if it exists, otherwise wait for the network
+        return response || fetchPromise;
+      });
+    })
   );
 });
+
 
 self.addEventListener('activate', event => {
   const cacheWhitelist = [CACHE_NAME];

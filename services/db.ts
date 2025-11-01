@@ -1,6 +1,5 @@
-
 import Dexie, { type Table } from 'dexie';
-import type { Worker, Project, TimeRecord, PlanMarker, SolarTable, TableAssignment, AttendanceSession, DailyLog, ProjectTask } from '../types';
+import type { Worker, Project, TimeRecord, PlanMarker, SolarTable, TableAssignment, AttendanceSession, DailyLog, ProjectTask, ProjectComponent } from '../types';
 
 export class MSTDatabase extends Dexie {
   workers!: Table<Worker>;
@@ -12,6 +11,7 @@ export class MSTDatabase extends Dexie {
   attendanceSessions!: Table<AttendanceSession>;
   dailyLogs!: Table<DailyLog>;
   projectTasks!: Table<ProjectTask>;
+  projectComponents!: Table<ProjectComponent>;
 
   constructor() {
     super('MSTDatabase');
@@ -86,6 +86,11 @@ export class MSTDatabase extends Dexie {
     // No migration needed as it's a new, unindexed property.
     dbInstance.version(10).stores({
         projects: '++id, name, status',
+    });
+
+    // Version 11: Adds projectComponents table for legend analysis results.
+    dbInstance.version(11).stores({
+      projectComponents: '++id, projectId',
     });
   }
 }

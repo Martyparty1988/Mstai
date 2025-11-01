@@ -1,5 +1,5 @@
 {
-  "name": "mst---martyho-solar-tracker-bitch",
+  "name": "mst---martyho-solar-tracker",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -15,7 +15,9 @@
     "react-dom": "^19.2.0",
     "dexie": "^4.2.1",
     "dexie-react-hooks": "^4.2.0",
-    "@google/genai": "^0.15.0"
+    "@google/genai": "^0.15.0",
+    "xlsx": "^0.18.5",
+    "papaparse": "^5.4.1"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

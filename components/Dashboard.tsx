@@ -1,6 +1,4 @@
 
-
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
@@ -13,6 +11,7 @@ import type { Worker, Project, AttendanceSession, TimeRecord } from '../types';
 import AIInsights from './AIInsights';
 import { processRecordDescription } from '../services/recordProcessor';
 import AICommandBar from './AICommandBar';
+import PWAInstallPrompt from './PWAInstallPrompt';
 
 // --- Clock-out Modal ---
 interface ClockOutModalProps {
@@ -363,6 +362,7 @@ const Dashboard: React.FC = () => {
 
     return (
         <div className="pb-24">
+            <PWAInstallPrompt />
             <h1 className="text-4xl md:text-5xl font-bold mb-8 cursor-pointer text-white [text-shadow:0_4px_12px_rgba(0,0,0,0.5)]" onClick={handleTitleClick} title="Secret Admin Login">
                 {t('dashboard')}
             </h1>

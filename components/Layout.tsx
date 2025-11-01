@@ -1,4 +1,5 @@
 
+
 import React, from 'react';
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
@@ -18,6 +19,8 @@ import CalendarIcon from './icons/CalendarIcon';
 import ChartBarIcon from './icons/ChartBarIcon';
 import SearchIcon from './icons/SearchIcon';
 import EyeIcon from './icons/EyeIcon';
+import UploadIcon from './icons/UploadIcon';
+import ConnectionStatusIndicator from './ConnectionStatusIndicator';
 
 const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isSidebarOpen, setSidebarOpen] = React.useState(false);
@@ -34,6 +37,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     { to: '/plan', label: t('plan'), icon: <MapIcon className="w-7 h-7" /> },
     { to: '/attendance', label: t('attendance'), icon: <CalendarIcon className="w-7 h-7" /> },
     { to: '/reports', label: t('reports'), icon: <DocumentTextIcon className="w-7 h-7" /> },
+    { to: '/import', label: t('import_data'), icon: <UploadIcon className="w-7 h-7" /> },
     { to: '/settings', label: t('settings'), icon: <SettingsIcon className="w-7 h-7" /> },
   ];
 
@@ -106,12 +110,12 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
-        <header className="flex justify-between items-center h-20 md:h-24 bg-black/10 backdrop-blur-xl border-b border-white/10 header-safe-area">
+        <header className={`flex justify-between items-center h-20 md:h-24 bg-black/10 backdrop-blur-xl border-b border-white/10 header-safe-area ${user?.role === 'admin' ? 'admin-indicator' : ''}`}>
           <button onClick={() => setSidebarOpen(true)} className="md:hidden text-gray-200 p-2">
             <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
           </button>
-          <div className="text-white font-semibold text-lg">
-            {user && <span>{user.username} ({user.role})</span>}
+          <div className="flex items-center gap-4 text-white font-semibold text-lg">
+            <ConnectionStatusIndicator />
           </div>
           <div className="flex items-center space-x-2 sm:space-x-4">
             <button onClick={toggleTheme} className="text-gray-200 hover:text-white transition-colors p-2 rounded-full hover:bg-white/10">

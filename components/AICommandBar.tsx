@@ -4,7 +4,7 @@ import { GoogleGenAI, FunctionDeclaration, Type } from '@google/genai';
 import { useI18n } from '../contexts/I18nContext';
 import { db } from '../services/db';
 import { useLiveQuery } from 'dexie-react-hooks';
-import type { TimeRecord, Worker, Project } from '../types';
+import type { TimeRecord, Worker, Project, SolarTable } from '../types';
 import { processRecordDescription } from '../services/recordProcessor';
 import MicrophoneIcon from './icons/MicrophoneIcon';
 import SendIcon from './icons/SendIcon';
@@ -117,10 +117,31 @@ const AICommandBar: React.FC = () => {
         updateTableStatus: async ({ projectName, tableCode, status }: { projectName: string, tableCode: string, status: 'pending' | 'completed' }) => {
             const project = findProject(projectName);
             const table = await db.solarTables.where({ projectId: project.id!, tableCode }).first();
-            if (!table) throw new Error(t('table_not_found', { code: tableCode }));
 
-            await db.solarTables.update(table.id!, { status });
-            return `Table ${tableCode} in ${project.name} marked as ${status}.`;
+            if (table) {
+                await db.solarTables.update(table.id!, { status });
+                return t('table_updated', { code: tableCode, project: project.name, status });
+            } else {
+                // Table not found, create it with default values.
+                const getTableTypeFromCode = (code: string): 'small' | 'medium' | 'large' => {
+                    const c = code.toLowerCase();
+                    if (c.startsWith('it28')) return 'small';
+                    if (c.startsWith('it42')) return 'medium';
+                    if (c.startsWith('it56')) return 'large';
+                    return 'small'; // Default to 'small' if type cannot be determined
+                };
+
+                const newTable: Omit<SolarTable, 'id'> = {
+                    projectId: project.id!,
+                    x: 5, // Default position at top-left, user can move it on the plan.
+                    y: 5,
+                    tableCode: tableCode,
+                    tableType: getTableTypeFromCode(tableCode),
+                    status: status,
+                };
+                await db.solarTables.add(newTable as SolarTable);
+                return t('table_not_found_and_created', { code: tableCode, project: project.name, status });
+            }
         }
     };
 

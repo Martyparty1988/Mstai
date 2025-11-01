@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../services/db';
@@ -7,16 +6,7 @@ import type { Project, SolarTable, TableAssignment, Worker } from '../types';
 
 declare const pdfjsLib: any;
 
-// Helper function to derive table type from code
-const getTableType = (code: string): 'small' | 'medium' | 'large' | null => {
-  const c = code.toLowerCase();
-  if (c.startsWith('it28')) return 'small';
-  if (c.startsWith('it42')) return 'medium';
-  if (c.startsWith('it56')) return 'large';
-  return null;
-};
-
-// Utility to get a consistent color for a worker
+// Helper to get a consistent color for a worker
 const getWorkerColor = (workerId: number) => {
   const colors = [
     '#ef4444', '#f97316', '#eab308', '#84cc16', '#22c55e', 
@@ -37,10 +27,9 @@ interface TableManagementModalProps {
 const TableManagementModal: React.FC<TableManagementModalProps> = ({ table, coords, projectId, onClose }) => {
     const { t } = useI18n();
     const [tableCode, setTableCode] = useState('');
-    const [tableType, setTableType] = useState<'small' | 'medium' | 'large' | null>(null);
+    const [tableType, setTableType] = useState<'small' | 'medium' | 'large'>('small');
     const [status, setStatus] = useState<'pending' | 'completed'>('pending');
     const [workerToAssign, setWorkerToAssign] = useState<number | ''>('');
-    const [codeError, setCodeError] = useState<string | null>(null);
 
     const assignments = useLiveQuery(() => table ? db.tableAssignments.where('tableId').equals(table.id!).toArray() : undefined, [table?.id]);
     const allWorkers = useLiveQuery(() => db.workers.toArray());
@@ -56,19 +45,6 @@ const TableManagementModal: React.FC<TableManagementModalProps> = ({ table, coor
             setStatus(table.status);
         }
     }, [table]);
-
-    const validateTableCode = useCallback((code: string) => {
-        if (code && !getTableType(code)) {
-            setCodeError(t('table_code_invalid'));
-        } else {
-            setCodeError(null);
-        }
-    }, [t]);
-
-    useEffect(() => {
-        setTableType(getTableType(tableCode));
-        validateTableCode(tableCode);
-    }, [tableCode, validateTableCode]);
 
     const handleAssignWorker = async () => {
         if (!table?.id || !workerToAssign) return;
@@ -86,23 +62,21 @@ const TableManagementModal: React.FC<TableManagementModalProps> = ({ table, coor
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        const derivedType = getTableType(tableCode);
         
-        // Re-validate on submit to catch empty required field or other errors
-        if (!tableCode || !derivedType) {
-            setCodeError(t('table_code_invalid'));
+        if (!tableCode) {
+            alert("Table code is required.");
             return;
         }
 
         if (table?.id) {
-            await db.solarTables.update(table.id, { tableCode, tableType: derivedType, status });
+            await db.solarTables.update(table.id, { tableCode, tableType, status });
         } else if (coords) {
             const newTable: Omit<SolarTable, 'id'> = {
                 projectId,
                 x: coords.x,
                 y: coords.y,
                 tableCode,
-                tableType: derivedType,
+                tableType,
                 status: 'pending',
             };
             await db.solarTables.add(newTable as SolarTable);
@@ -134,12 +108,21 @@ const TableManagementModal: React.FC<TableManagementModalProps> = ({ table, coor
                             onChange={(e) => setTableCode(e.target.value)}
                             placeholder={t('table_code_placeholder')}
                             required
-                            className={`mt-1 block w-full p-4 bg-black/20 text-white placeholder-gray-400 border rounded-xl focus:ring-blue-400 focus:border-blue-400 text-lg ${codeError ? 'border-red-500' : 'border-white/20'}`}
-                            aria-invalid={!!codeError}
-                            aria-describedby="table-code-error"
+                            className="mt-1 block w-full p-4 bg-black/20 text-white placeholder-gray-400 border border-white/20 rounded-xl focus:ring-blue-400 focus:border-blue-400 text-lg"
                         />
-                        {codeError && <p id="table-code-error" className="text-sm text-red-400 mt-2">{codeError}</p>}
-                        {tableCode && !codeError && <p className="text-sm text-gray-400 mt-2">{t('table_type')}: <span className="font-bold text-white">{tableType ? t(tableType) : 'N/A'}</span></p>}
+                    </div>
+                     <div>
+                        <label htmlFor="tableType" className="block text-lg font-medium text-gray-300 mb-2">{t('table_type')}</label>
+                        <select
+                            id="tableType"
+                            value={tableType}
+                            onChange={(e) => setTableType(e.target.value as 'small' | 'medium' | 'large')}
+                            className="mt-1 block w-full p-4 bg-black/20 text-white border border-white/20 rounded-xl focus:ring-blue-400 focus:border-blue-400 text-lg [&>option]:bg-gray-800"
+                        >
+                            <option value="small">{t('small')}</option>
+                            <option value="medium">{t('medium')}</option>
+                            <option value="large">{t('large')}</option>
+                        </select>
                     </div>
 
                     {table && (
@@ -215,6 +198,7 @@ const Plan: React.FC = () => {
     const [totalPages, setTotalPages] = useState(0);
 
     const projects = useLiveQuery(() => db.projects.toArray());
+    const allWorkers = useLiveQuery(() => db.workers.toArray());
     const selectedProject = useLiveQuery(() => selectedProjectId ? db.projects.get(selectedProjectId) : undefined, [selectedProjectId]);
     const tables = useLiveQuery(() => selectedProjectId ? db.solarTables.where('projectId').equals(selectedProjectId).toArray() : [], [selectedProjectId]);
     
@@ -234,7 +218,6 @@ const Plan: React.FC = () => {
         const map = new Map<number, number>();
         if (!assignments) return map;
 
-        // Sort assignments to be deterministic if order changes
         const sortedAssignments = [...assignments].sort((a, b) => a.id! - b.id!);
 
         for (const assignment of sortedAssignments) {
@@ -245,7 +228,6 @@ const Plan: React.FC = () => {
         return map;
     }, [assignments]);
 
-    // Calculate workload per worker
     const workerWorkload = useMemo(() => {
         const workload = new Map<number, number>();
         if (!assignments) return workload;
@@ -255,6 +237,14 @@ const Plan: React.FC = () => {
         }
         return workload;
     }, [assignments]);
+
+    const assignedWorkerIds = useMemo(() => [...new Set(assignments?.map(a => a.workerId) || [])], [assignments]);
+
+    const assignedWorkers = useMemo(() => {
+        if (!allWorkers || assignedWorkerIds.length === 0) return [];
+        const workerMap = new Map(allWorkers.map(w => [w.id!, w]));
+        return assignedWorkerIds.map(id => workerMap.get(id)).filter(Boolean) as Worker[];
+    }, [allWorkers, assignedWorkerIds]);
 
     useEffect(() => {
         pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js`;
@@ -286,14 +276,12 @@ const Plan: React.FC = () => {
     }, [zoom]);
 
     useEffect(() => {
-        // Cleanup previous state when project changes
         setAiPlanUrl(null);
         setPdfDoc(null);
         setPlanStatus(selectedProjectId ? 'loading' : 'idle');
     
         if (!selectedProject) return;
 
-        // Prioritize AI-redrawn plan
         if (selectedProject.aiPlanFile) {
             const url = URL.createObjectURL(selectedProject.aiPlanFile);
             setAiPlanUrl(url);
@@ -301,7 +289,6 @@ const Plan: React.FC = () => {
             return () => URL.revokeObjectURL(url);
         }
     
-        // Fallback to original PDF
         if (selectedProject.planFile) {
             const loadPdf = async () => {
                 const arrayBuffer = await selectedProject.planFile!.arrayBuffer();
@@ -422,7 +409,6 @@ const Plan: React.FC = () => {
         const firstWorkerId = tableIdToFirstWorkerIdMap.get(table.id!);
         const workload = firstWorkerId ? workerWorkload.get(firstWorkerId) || 1 : 1;
         
-        // Base size and more pronounced scale factor for workload visualization
         const baseSize = 28;
         const scale = 1 + Math.log1p(workload) * 0.4;
         const scaledSize = baseSize * scale;
@@ -443,7 +429,6 @@ const Plan: React.FC = () => {
             fontWeight: 'bold',
             transition: 'all 0.2s ease-in-out',
             opacity: table.status === 'completed' ? 0.65 : 1,
-            // More intense shadow/glow to show workload intensity
             boxShadow: `0 2px 10px rgba(0, 0, 0, 0.6), 0 0 ${Math.min(workload * 3, 35)}px ${backgroundColor}`,
             border: '2px solid white',
             width: `${scaledSize}px`,
@@ -456,7 +441,6 @@ const Plan: React.FC = () => {
             case 'medium':
                 return { ...baseStyle, borderRadius: '6px', backgroundColor };
             case 'large':
-                 // Large tables are rectangular and bigger
                 return { ...baseStyle, width: `${scaledSize * 1.4}px`, height: `${scaledSize * 0.85}px`, borderRadius: '6px', backgroundColor };
             default:
                 return { ...baseStyle, backgroundColor: '#6b7280' };
@@ -542,9 +526,43 @@ const Plan: React.FC = () => {
                     )}
                 </div>
                 {selectedProjectId && (
-                    <div className="mt-4 flex gap-2">
-                        <button onClick={() => setView('plan')} className={`px-5 py-2 font-bold rounded-lg transition ${view === 'plan' ? 'bg-[var(--color-primary)] text-white' : 'bg-white/10 hover:bg-white/20'}`}>{t('plan_view')}</button>
-                        <button onClick={() => setView('registry')} className={`px-5 py-2 font-bold rounded-lg transition ${view === 'registry' ? 'bg-[var(--color-primary)] text-white' : 'bg-white/10 hover:bg-white/20'}`}>{t('table_registry')}</button>
+                    <div className="mt-4 flex flex-col gap-4">
+                        <div className="flex gap-2">
+                            <button onClick={() => setView('plan')} className={`px-5 py-2 font-bold rounded-lg transition ${view === 'plan' ? 'bg-[var(--color-primary)] text-white' : 'bg-white/10 hover:bg-white/20'}`}>{t('plan_view')}</button>
+                            <button onClick={() => setView('registry')} className={`px-5 py-2 font-bold rounded-lg transition ${view === 'registry' ? 'bg-[var(--color-primary)] text-white' : 'bg-white/10 hover:bg-white/20'}`}>{t('table_registry')}</button>
+                        </div>
+                         <div className="flex flex-wrap gap-x-8 gap-y-4 pt-4 border-t border-white/10">
+                            {assignedWorkers.length > 0 && (
+                                <div>
+                                <h3 className="text-sm font-bold text-gray-300 uppercase tracking-wider mb-2">{t('assigned_workers_legend')}</h3>
+                                <div className="flex flex-wrap gap-4">
+                                    {assignedWorkers.map(worker => (
+                                    <div key={worker.id} className="flex items-center gap-2">
+                                        <div className="w-4 h-4 rounded-full" style={{ backgroundColor: getWorkerColor(worker.id!) }}></div>
+                                        <span className="text-white text-sm">{worker.name}</span>
+                                    </div>
+                                    ))}
+                                </div>
+                                </div>
+                            )}
+                            <div>
+                                <h3 className="text-sm font-bold text-gray-300 uppercase tracking-wider mb-2">{t('table_type_legend')}</h3>
+                                <div className="flex flex-wrap gap-4">
+                                <div className="flex items-center gap-2">
+                                    <div className="w-4 h-4 rounded-full bg-gray-500"></div>
+                                    <span className="text-white text-sm">{t('small_table')}</span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <div className="w-4 h-4 rounded-sm bg-gray-500"></div>
+                                    <span className="text-white text-sm">{t('medium_table')}</span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <div className="w-6 h-4 rounded-sm bg-gray-500"></div>
+                                    <span className="text-white text-sm">{t('large_table')}</span>
+                                </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 )}
             </div>

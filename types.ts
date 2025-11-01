@@ -1,4 +1,3 @@
-
 export interface Worker {
   id?: number;
   name: string;
@@ -78,4 +77,11 @@ export interface ProjectTask {
   projectId: number;
   description: string;
   completed: boolean;
+}
+
+export interface ProjectComponent {
+  id?: number;
+  projectId: number;
+  name: string;
+  description: string;
 }

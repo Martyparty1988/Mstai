@@ -16,6 +16,7 @@ import ProjectFinder from './components/ProjectFinder';
 import ImageAnalyzer from './components/ImageAnalyzer';
 import SplashScreen from './components/SplashScreen';
 import Login from './components/Login';
+import DataImporter from './components/DataImporter';
 
 const App: React.FC = () => {
   const { isAuthenticated, login } = useAuth();
@@ -29,9 +30,13 @@ const App: React.FC = () => {
     }
   };
   
+  const handleBackFromLogin = () => {
+    setShowAdminLogin(false);
+  };
+
   if (!isAuthenticated) {
     if (showAdminLogin) {
-      return <Login />;
+      return <Login onBack={handleBackFromLogin} />;
     }
     return <SplashScreen onUnlock={handleUnlock} />;
   }
@@ -51,6 +56,7 @@ const App: React.FC = () => {
           <Route path="/settings" element={<Settings />} />
           <Route path="/project-finder" element={<ProjectFinder />} />
           <Route path="/image-analyzer" element={<ImageAnalyzer />} />
+          <Route path="/import" element={<DataImporter />} />
           <Route path="*" element={<Navigate to="/" />} />
         </Routes>
       </Layout>

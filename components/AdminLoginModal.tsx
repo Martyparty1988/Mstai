@@ -18,7 +18,7 @@ const AdminLoginModal: React.FC<AdminLoginModalProps> = ({ onClose }) => {
     e.preventDefault();
     setError('');
 
-    if (username === 'admin' && password === 'admin' && adminSecret === 'mstadmin2024') {
+    if (username === 'admin' && password === 'Martyy88' && adminSecret === 'mstadmin2024') {
       login({ username: 'admin', role: 'admin' });
       onClose();
     } else {

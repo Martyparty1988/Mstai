@@ -4,12 +4,12 @@
   "name": "Martyho Solar Tracker",
   "icons": [
     {
-      "src": "https://picsum.photos/192/192",
+      "src": "https://image.pollinations.ai/prompt/a%20modern%20flat%20design%20app%20icon%20of%20a%20phoenix%20rising%20from%20a%20burning%20spreadsheet,%20vibrant%20orange%20and%20purple,%20minimalist,%20funny,%20cartoon%20style?width=192&height=192",
       "type": "image/png",
       "sizes": "192x192"
     },
     {
-      "src": "https://picsum.photos/512/512",
+      "src": "https://image.pollinations.ai/prompt/a%20modern%20flat%20design%20app%20icon%20of%20a%20phoenix%20rising%20from%20a%20burning%20spreadsheet,%20vibrant%20orange%20and%20purple,%20minimalist,%20funny,%20cartoon%20style?width=512&height=512",
       "type": "image/png",
       "sizes": "512x512"
     }
@@ -17,5 +17,5 @@
   "start_url": ".",
   "display": "standalone",
   "theme_color": "#1a202c",
-  "background_color": "#ffffff"
+  "background_color": "#1a202c"
 }
