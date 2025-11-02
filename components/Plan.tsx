@@ -2,7 +2,7 @@ import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../services/db';
 import { useI18n } from '../contexts/I18nContext';
-import type { Project, SolarTable, TableAssignment, Worker, AnnotationPath, PlanAnnotation } from '../types';
+import type { Project, SolarTable, TableAssignment, Worker, AnnotationPath, PlanAnnotation, TableStatusHistory } from '../types';
 import CheckCircleIcon from './icons/CheckCircleIcon';
 import ClockIcon from './icons/ClockIcon';
 import PencilSwooshIcon from './icons/PencilSwooshIcon';
@@ -43,6 +43,7 @@ const TableManagementModal: React.FC<TableManagementModalProps> = ({ table, coor
     // was returning `unknown[]`, causing a type error when accessing `w.name`.
     const workers: Worker[] | undefined = useLiveQuery(() => db.workers.toArray());
     const assignments = useLiveQuery(() => table ? db.tableAssignments.where('tableId').equals(table.id!).toArray() : [], [table]);
+    const history = useLiveQuery(() => table ? db.tableStatusHistory.where('tableId').equals(table.id!).reverse().sortBy('timestamp') : [], [table]);
     const workerMap = useMemo(() => new Map(workers?.map(w => [w.id!, w]) || []), [workers]);
     
     useEffect(() => {
@@ -86,7 +87,8 @@ const TableManagementModal: React.FC<TableManagementModalProps> = ({ table, coor
     
     const handleDelete = async () => {
         if (table?.id && window.confirm(t('confirm_delete'))) {
-            await db.transaction('rw', db.solarTables, db.tableAssignments, async () => {
+            await db.transaction('rw', db.solarTables, db.tableAssignments, db.tableStatusHistory, async () => {
+                await db.tableStatusHistory.where('tableId').equals(table.id!).delete();
                 await db.tableAssignments.where('tableId').equals(table.id!).delete();
                 await db.solarTables.delete(table.id!);
             });
@@ -112,69 +114,94 @@ const TableManagementModal: React.FC<TableManagementModalProps> = ({ table, coor
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-lg p-4">
             <div className="w-full max-w-lg p-8 bg-black/20 backdrop-blur-2xl rounded-3xl shadow-xl border border-white/10 max-h-[90vh] overflow-y-auto">
                 <h2 className="text-3xl font-bold mb-6 text-white">{table ? t('edit_table') : t('add_table')}</h2>
-                <form onSubmit={handleSubmit} className="space-y-6">
-                    <div>
-                        <label htmlFor="table-code" className="block text-lg font-medium text-gray-300 mb-2">{t('table_code')}</label>
-                        <input
-                            type="text"
-                            id="table-code"
-                            value={tableCode}
-                            onChange={e => setTableCode(e.target.value)}
-                            required
-                            className="mt-1 block w-full p-4 bg-black/20 text-white placeholder-gray-400 border border-white/20 rounded-xl focus:ring-blue-400 focus:border-blue-400 text-lg"
-                            placeholder={t('table_code_placeholder')}
-                        />
-                    </div>
-
-                    <div>
-                        <label htmlFor="table-type" className="block text-lg font-medium text-gray-300 mb-2">{t('table_type')}</label>
-                        <select
-                            id="table-type"
-                            value={tableType}
-                            onChange={e => setTableType(e.target.value as 'small' | 'medium' | 'large')}
-                            className="mt-1 block w-full p-4 bg-black/20 text-white border border-white/20 rounded-xl focus:ring-blue-400 focus:border-blue-400 text-lg [&>option]:bg-gray-800"
-                        >
-                            <option value="small">{t('small')}</option>
-                            <option value="medium">{t('medium')}</option>
-                            <option value="large">{t('large')}</option>
-                        </select>
-                    </div>
-
-                    <div>
-                        <label htmlFor="table-status" className="block text-lg font-medium text-gray-300 mb-2">{t('status')}</label>
-                        <select
-                            id="table-status"
-                            value={status}
-                            onChange={e => setStatus(e.target.value as 'pending' | 'completed')}
-                            className="mt-1 block w-full p-4 bg-black/20 text-white border border-white/20 rounded-xl focus:ring-blue-400 focus:border-blue-400 text-lg [&>option]:bg-gray-800"
-                        >
-                            <option value="pending">{t('pending')}</option>
-                            <option value="completed">{t('completed')}</option>
-                        </select>
-                    </div>
-
-                    {table && (
+                <form onSubmit={handleSubmit}>
+                    <div className="space-y-6">
                         <div>
-                            <label className="block text-lg font-medium text-gray-300 mb-2">{t('assigned_workers')}</label>
-                            <div className="space-y-2 mb-4 max-h-32 overflow-y-auto">
-                                {assignments?.map(a => (
-                                    <div key={a.id} className="flex justify-between items-center p-2 bg-white/10 rounded-lg">
-                                        <span className="text-gray-200">{workerMap.get(a.workerId)?.name || '...'}</span>
-                                        <button type="button" onClick={() => handleUnassignWorker(a.id!)} className="text-pink-400 hover:underline text-sm font-bold">{t('unassign')}</button>
-                                    </div>
-                                ))}
+                            <label htmlFor="table-code" className="block text-lg font-medium text-gray-300 mb-2">{t('table_code')}</label>
+                            <input
+                                type="text"
+                                id="table-code"
+                                value={tableCode}
+                                onChange={e => setTableCode(e.target.value)}
+                                required
+                                className="mt-1 block w-full p-4 bg-black/20 text-white placeholder-gray-400 border border-white/20 rounded-xl focus:ring-blue-400 focus:border-blue-400 text-lg"
+                                placeholder={t('table_code_placeholder')}
+                            />
+                        </div>
+
+                        <div>
+                            <label htmlFor="table-type" className="block text-lg font-medium text-gray-300 mb-2">{t('table_type')}</label>
+                            <select
+                                id="table-type"
+                                value={tableType}
+                                onChange={e => setTableType(e.target.value as 'small' | 'medium' | 'large')}
+                                className="mt-1 block w-full p-4 bg-black/20 text-white border border-white/20 rounded-xl focus:ring-blue-400 focus:border-blue-400 text-lg [&>option]:bg-gray-800"
+                            >
+                                <option value="small">{t('small')}</option>
+                                <option value="medium">{t('medium')}</option>
+                                <option value="large">{t('large')}</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label htmlFor="table-status" className="block text-lg font-medium text-gray-300 mb-2">{t('status')}</label>
+                            <select
+                                id="table-status"
+                                value={status}
+                                onChange={e => setStatus(e.target.value as 'pending' | 'completed')}
+                                className="mt-1 block w-full p-4 bg-black/20 text-white border border-white/20 rounded-xl focus:ring-blue-400 focus:border-blue-400 text-lg [&>option]:bg-gray-800"
+                            >
+                                <option value="pending">{t('pending')}</option>
+                                <option value="completed">{t('completed')}</option>
+                            </select>
+                        </div>
+
+                        {table && (
+                            <div>
+                                <label className="block text-lg font-medium text-gray-300 mb-2">{t('assigned_workers')}</label>
+                                <div className="space-y-2 mb-4 max-h-32 overflow-y-auto">
+                                    {assignments?.map(a => (
+                                        <div key={a.id} className="flex justify-between items-center p-2 bg-white/10 rounded-lg">
+                                            <span className="text-gray-200">{workerMap.get(a.workerId)?.name || '...'}</span>
+                                            <button type="button" onClick={() => handleUnassignWorker(a.id!)} className="text-pink-400 hover:underline text-sm font-bold">{t('unassign')}</button>
+                                        </div>
+                                    ))}
+                                </div>
+                                <div className="flex gap-2">
+                                    <select value={workerToAssign} onChange={e => setWorkerToAssign(Number(e.target.value))} className="flex-grow p-3 bg-black/20 text-white border border-white/20 rounded-xl [&>option]:bg-gray-800">
+                                        <option value="" disabled>{t('select_worker')}</option>
+                                        {workers?.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+                                    </select>
+                                    <button type="button" onClick={handleAssignWorker} className="px-4 bg-[var(--color-primary)] text-white font-bold rounded-xl">{t('add')}</button>
+                                </div>
                             </div>
-                            <div className="flex gap-2">
-                                <select value={workerToAssign} onChange={e => setWorkerToAssign(Number(e.target.value))} className="flex-grow p-3 bg-black/20 text-white border border-white/20 rounded-xl [&>option]:bg-gray-800">
-                                    <option value="" disabled>{t('select_worker')}</option>
-                                    {workers?.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
-                                </select>
-                                <button type="button" onClick={handleAssignWorker} className="px-4 bg-[var(--color-primary)] text-white font-bold rounded-xl">{t('add')}</button>
-                            </div>
+                        )}
+                    </div>
+                    
+                    {table && (
+                        <div className="mt-6 pt-6 border-t border-white/20">
+                            <h3 className="text-xl font-bold mb-4 text-white">{t('status_history')}</h3>
+                            {history && history.length > 0 ? (
+                                <ul className="space-y-3 max-h-40 overflow-y-auto pr-2">
+                                    {history.map(item => (
+                                        <li key={item.id} className="text-sm text-gray-300 flex items-start gap-3">
+                                            <div className={`mt-1 w-2 h-2 rounded-full flex-shrink-0 ${item.status === 'completed' ? 'bg-green-500' : 'bg-yellow-500'}`}></div>
+                                            <div>
+                                                <span className={`font-bold ${item.status === 'completed' ? 'text-green-400' : 'text-yellow-400'}`}>{t(item.status)}</span>
+                                                <span className="text-gray-400"> by </span>
+                                                <strong>{workerMap.get(item.workerId)?.name || '...'}</strong>
+                                                <div className="text-xs text-gray-500">{new Date(item.timestamp).toLocaleString()}</div>
+                                            </div>
+                                        </li>
+                                    ))}
+                                </ul>
+                            ) : (
+                                 <p className="text-sm text-gray-400">{t('no_history_found')}</p>
+                            )}
                         </div>
                     )}
 
-                    <div className="flex justify-between items-center pt-4">
+                    <div className="flex justify-between items-center pt-6">
                         <div>
                            {table && <button type="button" onClick={handleDelete} className="px-6 py-3 bg-pink-600/80 text-white font-bold rounded-xl hover:bg-pink-600 transition-colors">{t('delete')}</button>}
                         </div>
@@ -549,6 +576,9 @@ const PlanView: React.FC<PlanViewProps> = ({ project, solarTables, assignments, 
 // --- Registry View ---
 const RegistryView = ({ tables, assignments, workers }: { tables: SolarTable[], assignments: TableAssignment[], workers: Worker[]}) => {
     const { t } = useI18n();
+    const [searchTerm, setSearchTerm] = useState('');
+    const [sortConfig, setSortConfig] = useState<{ key: keyof SolarTable | 'assignedWorkers'; direction: 'ascending' | 'descending' } | null>({ key: 'tableCode', direction: 'ascending' });
+
     const workerMap = useMemo(() => new Map(workers.map(w => [w.id!, w])), [workers]);
     
     const assignmentsMap = useMemo(() => {
@@ -562,35 +592,103 @@ const RegistryView = ({ tables, assignments, workers }: { tables: SolarTable[], 
         return map;
     }, [assignments, workerMap]);
 
+    const processedTables = useMemo(() => {
+        if (!tables) return [];
+
+        // Augment tables with worker names for searching/sorting
+        const augmentedTables = tables.map(table => ({
+            ...table,
+            assignedWorkers: assignmentsMap.get(table.id!)?.map(w => w.name).join(', ') || ''
+        }));
+        
+        // Filter
+        let filtered = augmentedTables;
+        if (searchTerm) {
+            const lowercasedFilter = searchTerm.toLowerCase();
+            filtered = augmentedTables.filter(table =>
+                table.tableCode.toLowerCase().includes(lowercasedFilter) ||
+                t(table.tableType).toLowerCase().includes(lowercasedFilter) ||
+                t(table.status).toLowerCase().includes(lowercasedFilter) ||
+                table.assignedWorkers.toLowerCase().includes(lowercasedFilter)
+            );
+        }
+
+        // Sort
+        if (sortConfig !== null) {
+            filtered.sort((a, b) => {
+                const aValue = a[sortConfig.key as keyof typeof a];
+                const bValue = b[sortConfig.key as keyof typeof b];
+                
+                // Ensure aValue and bValue are comparable, defaulting null/undefined to avoid errors
+                const valA = aValue ?? '';
+                const valB = bValue ?? '';
+
+                if (valA < valB) {
+                    return sortConfig.direction === 'ascending' ? -1 : 1;
+                }
+                if (valA > valB) {
+                    return sortConfig.direction === 'ascending' ? 1 : -1;
+                }
+                return 0;
+            });
+        }
+        
+        return filtered;
+    }, [tables, searchTerm, sortConfig, assignmentsMap, t]);
+    
+    const requestSort = (key: keyof SolarTable | 'assignedWorkers') => {
+        let direction: 'ascending' | 'descending' = 'ascending';
+        if (sortConfig && sortConfig.key === key && sortConfig.direction === 'ascending') {
+            direction = 'descending';
+        }
+        setSortConfig({ key, direction });
+    };
+
+    const getSortIndicator = (key: keyof SolarTable | 'assignedWorkers') => {
+        if (!sortConfig || sortConfig.key !== key) return null;
+        return sortConfig.direction === 'ascending' ? ' ▲' : ' ▼';
+    };
+
     return (
-        <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-white/10">
-                <thead className="bg-white/10">
-                    <tr>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">{t('table_code')}</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">{t('table_type')}</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">{t('status')}</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">{t('assigned_workers')}</th>
-                    </tr>
-                </thead>
-                <tbody className="divide-y divide-white/10">
-                    {tables.map(table => (
-                        <tr key={table.id} className="hover:bg-white/5">
-                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-white">{table.tableCode}</td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">{t(table.tableType)}</td>
-                             <td className="px-6 py-4 whitespace-nowrap">
-                                <span className={`inline-flex items-center gap-2 px-3 py-1 text-sm font-bold rounded-full ${table.status === 'completed' ? 'bg-green-600/30 text-green-300' : 'bg-yellow-600/30 text-yellow-300'}`}>
-                                    {table.status === 'completed' ? <CheckCircleIcon className="w-5 h-5" /> : <ClockIcon className="w-5 h-5" />}
-                                    <span className="hidden sm:inline">{t(table.status)}</span>
-                                </span>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
-                                {assignmentsMap.get(table.id!)?.map(w => w.name).join(', ') || '-'}
-                            </td>
+        <div>
+            <div className="mb-4">
+                <input
+                    type="text"
+                    placeholder={`${t('search')}...`}
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full max-w-sm p-3 bg-black/20 text-white placeholder-gray-400 border border-white/20 rounded-xl focus:ring-blue-400 focus:border-blue-400 text-lg"
+                />
+            </div>
+            <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-white/10">
+                    <thead className="bg-white/10">
+                        <tr>
+                            <th onClick={() => requestSort('tableCode')} className="cursor-pointer px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">{t('table_code')}{getSortIndicator('tableCode')}</th>
+                            <th onClick={() => requestSort('tableType')} className="cursor-pointer px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">{t('table_type')}{getSortIndicator('tableType')}</th>
+                            <th onClick={() => requestSort('status')} className="cursor-pointer px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">{t('status')}{getSortIndicator('status')}</th>
+                            <th onClick={() => requestSort('assignedWorkers')} className="cursor-pointer px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">{t('assigned_workers')}{getSortIndicator('assignedWorkers')}</th>
                         </tr>
-                    ))}
-                </tbody>
-            </table>
+                    </thead>
+                    <tbody className="divide-y divide-white/10">
+                        {processedTables.length > 0 ? processedTables.map(table => (
+                            <tr key={table.id} className="hover:bg-white/5">
+                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-white">{table.tableCode}</td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">{t(table.tableType)}</td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                    <span className={`inline-flex items-center gap-2 px-3 py-1 text-sm font-bold rounded-full ${table.status === 'completed' ? 'bg-green-600/30 text-green-300' : 'bg-yellow-600/30 text-yellow-300'}`}>
+                                        {table.status === 'completed' ? <CheckCircleIcon className="w-5 h-5" /> : <ClockIcon className="w-5 h-5" />}
+                                        <span className="hidden sm:inline">{t(table.status)}</span>
+                                    </span>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">{table.assignedWorkers || '-'}</td>
+                            </tr>
+                        )) : (
+                           <tr><td colSpan={4} className="text-center py-12 text-gray-400">{t('no_data')}</td></tr>
+                        )}
+                    </tbody>
+                </table>
+            </div>
         </div>
     );
 };

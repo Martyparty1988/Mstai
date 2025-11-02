@@ -1,9 +1,10 @@
-
 import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
 
-type Theme = 'stellar' | 'inferno' | 'cobalt' | 'hunter' | 'carbon' | 'emerald' | 'crimson' | 'oceanic';
+type Theme = 'nova' | 'stellar' | 'inferno' | 'cobalt' | 'hunter' | 'carbon' | 'emerald' | 'crimson' | 'oceanic' | 'aether';
 
-export const themesData: { id: Theme; nameKey: 'theme_stellar' | 'theme_inferno' | 'theme_cobalt' | 'theme_hunter' | 'theme_carbon' | 'theme_emerald' | 'theme_crimson' | 'theme_oceanic'; colors: string[] }[] = [
+export const themesData: { id: Theme; nameKey: any; colors: string[] }[] = [
+    { id: 'nova', nameKey: 'theme_nova', colors: ['#090979', '#00d4ff'] },
+    { id: 'aether', nameKey: 'theme_aether', colors: ['#e0f2fe', '#0ea5e9'] },
     { id: 'stellar', nameKey: 'theme_stellar', colors: ['#302b63', '#8a2be2'] },
     { id: 'cobalt', nameKey: 'theme_cobalt', colors: ['#0052D4', '#4364F7'] },
     { id: 'inferno', nameKey: 'theme_inferno', colors: ['#ff7e5f', '#feb47b'] },
@@ -24,7 +25,7 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [theme, setThemeState] = useState<Theme>(() => {
       const savedTheme = localStorage.getItem('appTheme');
-      return (themesData.some(t => t.id === savedTheme) ? savedTheme : 'stellar') as Theme;
+      return (themesData.some(t => t.id === savedTheme) ? savedTheme : 'nova') as Theme;
   });
 
   const setTheme = useCallback((newTheme: Theme) => {

@@ -45,7 +45,7 @@ const Workers: React.FC = () => {
         <h1 className="text-5xl font-bold text-white [text-shadow:0_4px_12px_rgba(0,0,0,0.5)]">{t('workers')}</h1>
         <button
           onClick={handleAdd}
-          className="px-6 py-3 bg-[var(--color-primary)] text-white font-bold rounded-xl hover:bg-[var(--color-primary-hover)] transition-all shadow-lg text-lg"
+          className="px-6 py-3 bg-[var(--color-primary)] text-white font-bold rounded-xl hover:bg-[var(--color-primary-hover)] transition-all shadow-lg text-lg transform hover:scale-105"
         >
           {t('add_worker')}
         </button>
@@ -57,14 +57,14 @@ const Workers: React.FC = () => {
           placeholder={`${t('search')}...`}
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          className="w-full max-w-md p-4 bg-black/20 text-white placeholder-gray-300 border border-white/20 rounded-xl focus:ring-blue-400 focus:border-blue-400 text-lg"
+          className="w-full max-w-md p-4 bg-slate-800/60 text-white placeholder-gray-400 border border-slate-700 rounded-xl focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900 focus:ring-sky-400 focus:border-sky-400 text-lg"
         />
       </div>
 
-      <div className="bg-black/20 backdrop-blur-2xl rounded-3xl border border-white/10 shadow-lg overflow-hidden">
+      <div className="bg-slate-900/30 backdrop-blur-2xl rounded-2xl border border-white/10 shadow-lg overflow-hidden">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-white/10">
-            <thead className="bg-white/10">
+            <thead className="bg-slate-500/10">
               <tr>
                 <th scope="col" className="px-6 py-4 text-left text-sm font-bold text-gray-200 uppercase tracking-wider">ID</th>
                 <th scope="col" className="px-6 py-4 text-left text-sm font-bold text-gray-200 uppercase tracking-wider">{t('worker_name')}</th>
@@ -76,14 +76,14 @@ const Workers: React.FC = () => {
             </thead>
             <tbody className="divide-y divide-white/10">
               {filteredWorkers?.map((worker) => (
-                <tr key={worker.id} className="hover:bg-white/10 transition-colors">
+                <tr key={worker.id} className="hover:bg-sky-400/10 transition-colors">
                   <td className="px-6 py-5 whitespace-nowrap text-lg font-medium text-white">{worker.id}</td>
                   <td className="px-6 py-5 whitespace-nowrap text-lg text-gray-200">{worker.name}</td>
                   {user?.role === 'admin' && (
                     <td className="px-6 py-5 whitespace-nowrap text-lg text-gray-200">{worker.hourlyRate}</td>
                   )}
                   <td className="px-6 py-5 whitespace-nowrap text-right text-lg font-bold space-x-6">
-                    <button onClick={() => handleEdit(worker)} className="text-blue-400 hover:underline">{t('edit_worker')}</button>
+                    <button onClick={() => handleEdit(worker)} className="text-sky-400 hover:underline">{t('edit_worker')}</button>
                     <button onClick={() => handleDelete(worker.id!)} className="text-pink-500 hover:underline">{t('delete')}</button>
                   </td>
                 </tr>

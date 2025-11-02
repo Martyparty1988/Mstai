@@ -1,4 +1,3 @@
-
 import React, { useRef, useEffect, useCallback } from 'react';
 
 interface SplashScreenProps {
@@ -85,12 +84,11 @@ const SplashScreen: React.FC<SplashScreenProps> = ({ onUnlock }) => {
       <div className="relative text-center">
         <div className="cursor-pointer inline-block select-none p-4">
           <h1 
-            className="text-8xl md:text-9xl font-bold text-white tracking-wider animate-subtle-pulse" 
-            style={{ textShadow: '0 0 20px rgba(255,255,255,0.7)' }}
+            className="text-8xl md:text-9xl font-bold tracking-wider" 
           >
-            MST
+            <span className="text-shimmer">MST</span>
           </h1>
-          <p className="text-white/80 text-xl md:text-2xl">Martyho Solar Tracker</p>
+          <p className="text-white/80 text-xl md:text-2xl mt-2">Martyho Solar Tracker</p>
         </div>
       </div>
     </div>

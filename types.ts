@@ -75,9 +75,22 @@ export interface DailyLog {
 export interface ProjectTask {
   id?: number;
   projectId: number;
+  taskType: 'panels' | 'construction' | 'cables';
   description: string;
-  completed: boolean;
+  
+  // Fields for panels
+  panelCount?: number;
+  pricePerPanel?: number;
+  
+  // Fields for cables
+  tableSize?: 'small' | 'medium' | 'large';
+  
+  // General fields
+  price: number; // This will be the total price for the task
+  assignedWorkerId?: number;
+  completionDate?: Date;
 }
+
 
 export interface ProjectComponent {
   id?: number;
@@ -98,4 +111,12 @@ export interface PlanAnnotation {
   projectId: number;
   page: number;
   paths: AnnotationPath[];
+}
+
+export interface TableStatusHistory {
+  id?: number;
+  tableId: number;
+  workerId: number;
+  status: 'pending' | 'completed';
+  timestamp: Date;
 }

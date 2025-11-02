@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { NavLink, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
@@ -17,11 +16,11 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     <div className="flex h-screen bg-transparent overflow-hidden">
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
-        <header className={`flex justify-between items-center h-20 md:h-24 bg-black/10 backdrop-blur-xl border-b border-white/10 header-safe-area ${user?.role === 'admin' ? 'admin-indicator' : ''}`}>
-           <Link to="/" className="text-3xl sm:text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-[var(--color-accent)] [text-shadow:0_2px_8px_rgba(0,0,0,0.5)] tracking-wider">
+        <header className={`flex justify-between items-center h-20 md:h-24 bg-slate-900/50 dark:bg-slate-950/50 backdrop-blur-2xl border-b border-white/10 header-safe-area ${user?.role === 'admin' ? 'admin-indicator' : ''}`}>
+           <Link to="/" className="text-3xl sm:text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-[var(--color-accent)] to-white [text-shadow:0_2px_8px_rgba(0,0,0,0.5)] tracking-wider">
               MST
             </Link>
-          <div className="flex items-center gap-4 text-white font-semibold text-lg">
+          <div className="flex items-center gap-4 text-sky-800 dark:text-white font-semibold text-lg">
             <ConnectionStatusIndicator />
           </div>
           <div className="flex items-center space-x-2 sm:space-x-4">
@@ -31,7 +30,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
             <select
                 value={language}
                 onChange={e => setLanguage(e.target.value as 'en' | 'cs')}
-                className="bg-transparent text-gray-200 border-none focus:ring-0 font-bold text-lg p-2 cursor-pointer"
+                className="bg-transparent text-gray-200 border-none focus:ring-0 font-bold text-lg p-2 cursor-pointer appearance-none"
             >
                 <option value="cs" className="bg-gray-800">CS</option>
                 <option value="en" className="bg-gray-800">EN</option>

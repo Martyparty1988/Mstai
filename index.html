@@ -6,12 +6,23 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="theme-color" content="#1a202c" />
+    <meta name="theme-color" content="#020024" />
     <title>MST - Martyho Solar Tracker</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="manifest" href="/manifest.json" />
     <style>
-      :root, [data-theme="stellar"] {
+      :root, [data-theme="nova"] {
+        --bg-gradient: linear-gradient(160deg, #020024 0%, #090979 35%, #00d4ff 100%);
+        --color-primary: #6366f1; /* indigo-500 */
+        --color-primary-hover: #818cf8; /* indigo-400 */
+        --color-secondary: #0e7490; /* cyan-700 */
+        --color-accent: #38bdf8; /* sky-400 */
+        --color-chart-1: #6366f1;
+        --color-chart-2: #38bdf8;
+        --color-chart-3: #00d4ff;
+      }
+
+      [data-theme="stellar"] {
         --bg-gradient: linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
         --color-primary: #8a2be2;
         --color-primary-hover: #9932cc;
@@ -22,6 +33,17 @@
         --color-chart-3: #a855f7;
       }
       
+      [data-theme="aether"] {
+        --bg-gradient: linear-gradient(145deg, #f0f9ff 0%, #e0f2fe 100%);
+        --color-primary: #0ea5e9; /* sky-500 */
+        --color-primary-hover: #38bdf8; /* sky-400 */
+        --color-secondary: #06b6d4; /* cyan-500 */
+        --color-accent: #22d3ee; /* cyan-400 */
+        --color-chart-1: #0ea5e9;
+        --color-chart-2: #22d3ee;
+        --color-chart-3: #67e8f9;
+      }
+
       [data-theme="cobalt"] {
         --bg-gradient: linear-gradient(135deg, #0052D4 0%, #4364F7 50%, #6FB1FC 100%);
         --color-primary: #2563eb; /* blue-600 */
@@ -105,23 +127,28 @@
         overscroll-behavior-y: contain; /* Prevents pull-to-refresh for a native feel */
       }
 
-      @keyframes subtle-pulse {
-        0%, 100% {
-          text-shadow: 0 0 20px rgba(255, 255, 255, 0.7);
-          transform: scale(1);
-        }
-        50% {
-          text-shadow: 0 0 30px rgba(255, 255, 255, 1);
-          transform: scale(1.02);
-        }
+      @keyframes shimmer {
+        0% { background-position: -500% 0; }
+        100% { background-position: 500% 0; }
       }
 
-      .animate-subtle-pulse {
-        animation: subtle-pulse 4s ease-in-out infinite;
+      .text-shimmer {
+        background: linear-gradient(to right, 
+          var(--color-accent) 20%, 
+          #fff 40%, 
+          #fff 60%, 
+          var(--color-accent) 80%);
+        background-size: 200% auto;
+        color: #000;
+        background-clip: text;
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        animation: shimmer 8s linear infinite;
       }
+      
 
       .admin-indicator {
-        box-shadow: inset 0 3px 0 0 var(--color-primary);
+        box-shadow: inset 0 -3px 0 0 var(--color-primary);
       }
 
       @keyframes fadeIn {
@@ -179,7 +206,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
     <script>
       // Apply theme from localStorage immediately
-      const savedAppTheme = localStorage.getItem('appTheme') || 'stellar';
+      const savedAppTheme = localStorage.getItem('appTheme') || 'nova';
       document.documentElement.setAttribute('data-theme', savedAppTheme);
 
       // Apply dark mode from localStorage immediately
@@ -206,7 +233,7 @@
 }
 </script>
 </head>
-  <body class="text-gray-100">
+  <body class="text-gray-800 dark:text-gray-100">
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
   </body>

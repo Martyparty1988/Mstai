@@ -1,9 +1,8 @@
-
 import React, { useState, useMemo } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../services/db';
 import { useI18n } from '../contexts/I18nContext';
-import type { TimeRecord, Worker, Project } from '../types';
+import type { TimeRecord, Worker, Project, ProjectTask } from '../types';
 import DocumentTextIcon from './icons/DocumentTextIcon';
 
 // Helper to get today's date in YYYY-MM-DD format
@@ -18,19 +17,20 @@ const Reports: React.FC = () => {
     const [customStart, setCustomStart] = useState('');
     const [customEnd, setCustomEnd] = useState('');
 
-    const [reportData, setReportData] = useState<TimeRecord[] | null>(null);
-    const [reportStats, setReportStats] = useState<{ totalHours: number; totalCost: number; title: string } | null>(null);
+    const [reportData, setReportData] = useState<{ records: TimeRecord[], tasks: ProjectTask[] } | null>(null);
+    const [reportStats, setReportStats] = useState<{ totalHours: number; totalHourlyCost: number; totalTaskCost: number; title: string } | null>(null);
 
     const workers = useLiveQuery(() => db.workers.toArray());
     const projects = useLiveQuery(() => db.projects.toArray());
     const allRecords = useLiveQuery(() => db.records.toArray());
+    const allTasks = useLiveQuery(() => db.projectTasks.toArray());
 
     const workerMap = useMemo(() => new Map<number, Worker>(workers?.map(w => [w.id!, w]) || []), [workers]);
     const projectMap = useMemo(() => new Map<number, Project>(projects?.map(p => [p.id!, p]) || []), [projects]);
 
     const handleGenerateReport = () => {
-        if (!allRecords || !workers) {
-            setReportData([]);
+        if (!allRecords || !workers || !allTasks) {
+            setReportData({ records: [], tasks: [] });
             return;
         }
 
@@ -86,9 +86,15 @@ const Reports: React.FC = () => {
             const recordTime = new Date(record.startTime).getTime();
             return recordTime >= startDate.getTime() && recordTime <= endDate.getTime();
         });
+        
+        const filteredTasks = allTasks.filter(task => {
+            if (!task.completionDate) return false;
+            const taskTime = new Date(task.completionDate).getTime();
+            return taskTime >= startDate.getTime() && taskTime <= endDate.getTime();
+        });
 
         let totalHours = 0;
-        let totalCost = 0;
+        let totalHourlyCost = 0;
 
         filteredRecords.forEach(record => {
             const durationMs = new Date(record.endTime).getTime() - new Date(record.startTime).getTime();
@@ -97,19 +103,25 @@ const Reports: React.FC = () => {
 
             const worker = workerMap.get(record.workerId);
             if (worker) {
-                totalCost += durationHours * worker.hourlyRate;
+                totalHourlyCost += durationHours * worker.hourlyRate;
             }
         });
+        
+        const totalTaskCost = filteredTasks.reduce((sum, task) => sum + task.price, 0);
 
-        setReportData(filteredRecords.sort((a,b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime()));
-        setReportStats({ totalHours, totalCost, title });
+        setReportData({ 
+            records: filteredRecords.sort((a,b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime()),
+            tasks: filteredTasks.sort((a,b) => new Date(a.completionDate!).getTime() - new Date(b.completionDate!).getTime())
+        });
+        setReportStats({ totalHours, totalHourlyCost, totalTaskCost, title });
     };
 
     const handleExportCSV = () => {
-        if (!reportData || reportData.length === 0) return;
+        if (!reportData) return;
 
-        const headers = [t('worker_name'), t('project_name'), t('description'), t('start_time'), t('end_time'), t('duration')];
-        const rows = reportData.map(record => {
+        const headers = [t('type'), t('worker_name'), t('project_name'), t('description'), t('date_or_start_time'), t('end_time'), t('duration'), t('cost')];
+        
+        const recordRows = reportData.records.map(record => {
             const workerName = workerMap.get(record.workerId)?.name || 'N/A';
             const projectName = projectMap.get(record.projectId)?.name || 'N/A';
             const startTime = new Date(record.startTime).toLocaleString();
@@ -118,11 +130,20 @@ const Reports: React.FC = () => {
             const hours = Math.floor(durationMs / 3600000);
             const minutes = Math.floor((durationMs % 3600000) / 60000);
             const duration = `${hours}h ${minutes}m`;
+            const cost = ((durationMs / (1000 * 60 * 60)) * (workerMap.get(record.workerId)?.hourlyRate || 0)).toFixed(2);
 
-            return [workerName, projectName, `"${record.description.replace(/"/g, '""')}"`, startTime, endTime, duration].join(',');
+            return ['Hourly', workerName, projectName, `"${record.description.replace(/"/g, '""')}"`, startTime, endTime, duration, cost].join(',');
         });
 
-        const csvContent = "data:text/csv;charset=utf-8," + [headers.join(','), ...rows].join('\n');
+        const taskRows = reportData.tasks.map(task => {
+            const workerName = task.assignedWorkerId ? (workerMap.get(task.assignedWorkerId)?.name || 'N/A') : 'N/A';
+            const projectName = projectMap.get(task.projectId)?.name || 'N/A';
+            const completionDate = new Date(task.completionDate!).toLocaleDateString();
+            
+            return ['Task', workerName, projectName, `"${task.description.replace(/"/g, '""')}"`, completionDate, '', '', task.price.toFixed(2)].join(',');
+        });
+
+        const csvContent = "data:text/csv;charset=utf-8," + [headers.join(','), ...recordRows, ...taskRows].join('\n');
         const encodedUri = encodeURI(csvContent);
         const link = document.createElement("a");
         link.setAttribute("href", encodedUri);
@@ -204,19 +225,26 @@ const Reports: React.FC = () => {
                         </button>
                     </div>
                     
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
                         <div className="p-6 bg-black/20 rounded-2xl border border-white/10 text-center">
-                            <h3 className="text-xl font-bold text-gray-300 mb-2">{t('total_hours')}</h3>
-                            <p className="text-4xl font-extrabold text-white">{reportStats.totalHours.toFixed(2)}</p>
+                            <h3 className="text-xl font-bold text-gray-300 mb-2">{t('total_hourly_cost')}</h3>
+                            <p className="text-4xl font-extrabold text-white">€{reportStats.totalHourlyCost.toFixed(2)}</p>
+                            <p className="text-gray-400">({reportStats.totalHours.toFixed(2)} {t('hours')})</p>
                         </div>
                          <div className="p-6 bg-black/20 rounded-2xl border border-white/10 text-center">
-                            <h3 className="text-xl font-bold text-gray-300 mb-2">{t('total_cost')}</h3>
-                            <p className="text-4xl font-extrabold text-white">€{reportStats.totalCost.toFixed(2)}</p>
+                            <h3 className="text-xl font-bold text-gray-300 mb-2">{t('total_task_cost')}</h3>
+                            <p className="text-4xl font-extrabold text-white">€{reportStats.totalTaskCost.toFixed(2)}</p>
+                            <p className="text-gray-400">({reportData.tasks.length} {t('tasks')})</p>
+                        </div>
+                         <div className="p-6 bg-gradient-to-br from-[var(--color-primary)] to-[var(--color-accent)] rounded-2xl text-center">
+                            <h3 className="text-xl font-bold text-white mb-2">{t('total_cost')}</h3>
+                            <p className="text-4xl font-extrabold text-white">€{(reportStats.totalHourlyCost + reportStats.totalTaskCost).toFixed(2)}</p>
                         </div>
                     </div>
 
                     <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-white/10">
+                        <h3 className="text-2xl font-bold text-white mb-4">{t('records')}</h3>
+                        <table className="min-w-full divide-y divide-white/10 mb-8">
                              <thead className="bg-white/10">
                                 <tr>
                                     <th className="px-6 py-4 text-left text-sm font-bold text-gray-200 uppercase tracking-wider">{t('worker_name')}</th>
@@ -226,7 +254,7 @@ const Reports: React.FC = () => {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-white/10">
-                                {reportData.length > 0 ? reportData.map(record => (
+                                {reportData.records.length > 0 ? reportData.records.map(record => (
                                     <tr key={record.id} className="hover:bg-white/10 transition-colors">
                                         <td className="px-6 py-5 whitespace-nowrap text-lg font-medium text-white">{workerMap.get(record.workerId)?.name}</td>
                                         <td className="px-6 py-5 whitespace-nowrap text-lg text-gray-200">{projectMap.get(record.projectId)?.name}</td>
@@ -236,6 +264,32 @@ const Reports: React.FC = () => {
                                 )) : (
                                     <tr>
                                         <td colSpan={4} className="text-center py-12 text-gray-300 text-lg">{t('no_records_found')}</td>
+                                    </tr>
+                                )}
+                            </tbody>
+                        </table>
+                        
+                        <h3 className="text-2xl font-bold text-white mb-4">{t('tasks')}</h3>
+                        <table className="min-w-full divide-y divide-white/10">
+                             <thead className="bg-white/10">
+                                <tr>
+                                    <th className="px-6 py-4 text-left text-sm font-bold text-gray-200 uppercase tracking-wider">{t('worker_name')}</th>
+                                    <th className="px-6 py-4 text-left text-sm font-bold text-gray-200 uppercase tracking-wider">{t('project_name')}</th>
+                                    <th className="px-6 py-4 text-left text-sm font-bold text-gray-200 uppercase tracking-wider">{t('task_description')}</th>
+                                    <th className="px-6 py-4 text-left text-sm font-bold text-gray-200 uppercase tracking-wider">{t('cost')}</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-white/10">
+                                {reportData.tasks.length > 0 ? reportData.tasks.map(task => (
+                                    <tr key={task.id} className="hover:bg-white/10 transition-colors">
+                                        <td className="px-6 py-5 whitespace-nowrap text-lg font-medium text-white">{task.assignedWorkerId ? workerMap.get(task.assignedWorkerId)?.name : t('unassigned')}</td>
+                                        <td className="px-6 py-5 whitespace-nowrap text-lg text-gray-200">{projectMap.get(task.projectId)?.name}</td>
+                                        <td className="px-6 py-5 text-lg text-gray-200 max-w-xs whitespace-normal break-words">{task.description}</td>
+                                        <td className="px-6 py-5 whitespace-nowrap text-lg font-bold text-white">€{task.price.toFixed(2)}</td>
+                                    </tr>
+                                )) : (
+                                    <tr>
+                                        <td colSpan={4} className="text-center py-12 text-gray-300 text-lg">{t('no_tasks_found')}</td>
                                     </tr>
                                 )}
                             </tbody>

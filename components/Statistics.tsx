@@ -1,13 +1,9 @@
-
-
-
-
 import React, { useMemo } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, } from 'recharts';
 import { db } from '../services/db';
 import { useI18n } from '../contexts/I18nContext';
-import type { Project, TimeRecord, Worker, SolarTable } from '../types';
+import type { Project, TimeRecord, Worker, SolarTable, ProjectTask } from '../types';
 
 const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
@@ -159,9 +155,11 @@ const Statistics: React.FC = () => {
     const workers = useLiveQuery(() => db.workers.toArray(), []);
     const records = useLiveQuery(() => db.records.toArray(), []);
     const solarTables = useLiveQuery(() => db.solarTables.toArray(), []);
+    const projectTasks = useLiveQuery(() => db.projectTasks.toArray(), []);
+
 
     const stats = useMemo(() => {
-        if (!projects || !workers || !records) {
+        if (!projects || !workers || !records || !projectTasks) {
             return {
                 totalProjects: 0,
                 completionRateData: [],
@@ -179,10 +177,9 @@ const Statistics: React.FC = () => {
         ];
 
         // Hours and Cost per project
-        // Fix: Explicitly type maps to resolve TypeScript inference issues.
         const workerRateMap = new Map<number, number>(workers.map(w => [w.id!, w.hourlyRate]));
-        const projectDataMap = new Map<number, { name: string; hours: number; cost: number }>(
-            projects.map(p => [p.id!, { name: p.name, hours: 0, cost: 0 }])
+        const projectDataMap = new Map<number, { name: string; hours: number; cost: number; taskCost: number }>(
+            projects.map(p => [p.id!, { name: p.name, hours: 0, cost: 0, taskCost: 0 }])
         );
 
         for (const record of records) {
@@ -195,8 +192,20 @@ const Statistics: React.FC = () => {
             }
         }
         
+        for (const task of projectTasks) {
+            if (task.completionDate) {
+                const project = projectDataMap.get(task.projectId);
+                if (project) {
+                    project.taskCost += task.price;
+                }
+            }
+        }
+        
         const hoursData = Array.from(projectDataMap.values()).map(p => ({ name: p.name, [t('hours')]: parseFloat(p.hours.toFixed(2)) }));
-        const costData = Array.from(projectDataMap.values()).map(p => ({ name: p.name, [t('cost')]: parseFloat(p.cost.toFixed(2)) }));
+        const costData = Array.from(projectDataMap.values()).map(p => ({ 
+            name: p.name, 
+            [t('cost')]: parseFloat((p.cost + p.taskCost).toFixed(2)) 
+        }));
 
 
         return {
@@ -205,7 +214,7 @@ const Statistics: React.FC = () => {
             hoursData,
             costData,
         };
-    }, [projects, workers, records, t]);
+    }, [projects, workers, records, projectTasks, t]);
 
     const PIE_COLORS = ['url(#pieGradient1)', 'url(#pieGradient2)'];
     
@@ -302,7 +311,7 @@ const Statistics: React.FC = () => {
                                 <YAxis stroke="#fff" />
                                 <Tooltip content={<CustomTooltip />} cursor={{fill: 'rgba(255,255,255,0.1)'}} />
                                 <Legend wrapperStyle={{color: '#fff', fontWeight: 'bold', paddingTop: '20px'}}/>
-                                <Bar dataKey={t('cost')} fill="url(#barGradientSecondary)" radius={[10, 10, 0, 0]} />
+                                <Bar dataKey={t('cost')} name={t('total_cost_per_project')} fill="url(#barGradientSecondary)" radius={[10, 10, 0, 0]} />
                            </BarChart>
                         </ResponsiveContainer>
                     ) : <p className="text-center text-gray-300 py-12 text-lg">{t('no_data')}</p>}

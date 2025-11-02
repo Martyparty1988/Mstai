@@ -18,7 +18,7 @@ export const processRecordDescription = async (record: TimeRecord): Promise<void
   if (tableCodes.size === 0) return;
 
   try {
-    await db.transaction('rw', db.solarTables, db.tableAssignments, async () => {
+    await db.transaction('rw', db.solarTables, db.tableAssignments, db.tableStatusHistory, async () => {
       for (const code of tableCodes) {
         // Find the table in the current project
         const table = await db.solarTables
@@ -26,9 +26,16 @@ export const processRecordDescription = async (record: TimeRecord): Promise<void
           .first();
 
         if (table && table.id) {
-          // 1. Update table status to completed
+          // 1. Update table status to completed and log history if it changed
           if (table.status !== 'completed') {
             await db.solarTables.update(table.id, { status: 'completed' });
+            // Log the change to history
+            await db.tableStatusHistory.add({
+                tableId: table.id,
+                workerId: record.workerId,
+                status: 'completed',
+                timestamp: new Date(),
+            });
           }
 
           // 2. Assign the worker to the table if not already assigned

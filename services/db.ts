@@ -1,5 +1,5 @@
 import Dexie, { type Table } from 'dexie';
-import type { Worker, Project, TimeRecord, PlanMarker, SolarTable, TableAssignment, AttendanceSession, DailyLog, ProjectTask, ProjectComponent, PlanAnnotation } from '../types';
+import type { Worker, Project, TimeRecord, PlanMarker, SolarTable, TableAssignment, AttendanceSession, DailyLog, ProjectTask, ProjectComponent, PlanAnnotation, TableStatusHistory } from '../types';
 
 export class MSTDatabase extends Dexie {
   workers!: Table<Worker>;
@@ -13,6 +13,7 @@ export class MSTDatabase extends Dexie {
   projectTasks!: Table<ProjectTask>;
   projectComponents!: Table<ProjectComponent>;
   planAnnotations!: Table<PlanAnnotation>;
+  tableStatusHistory!: Table<TableStatusHistory>;
 
   constructor() {
     super('MSTDatabase');
@@ -97,6 +98,35 @@ export class MSTDatabase extends Dexie {
     // Version 12: Add table for plan drawing annotations.
     dbInstance.version(12).stores({
       planAnnotations: '++id, &[projectId+page]',
+    });
+
+    // Version 13: Add table for solar table status history.
+    dbInstance.version(13).stores({
+      tableStatusHistory: '++id, tableId, timestamp',
+    });
+
+    // Version 14: Update projectTasks for task-based pay.
+    dbInstance.version(14).stores({
+      projectTasks: '++id, projectId, assignedWorkerId',
+    }).upgrade(tx => {
+        return tx.table('projectTasks').toCollection().modify(task => {
+            task.completionDate = (task as any).completed ? new Date() : undefined;
+            task.price = 0;
+            task.assignedWorkerId = undefined;
+            delete (task as any).completed;
+        });
+    });
+
+    // Version 15: Update projectTasks for categorized task-based pay.
+    dbInstance.version(15).stores({
+      projectTasks: '++id, projectId, assignedWorkerId',
+    }).upgrade(tx => {
+        return tx.table('projectTasks').toCollection().modify(task => {
+            task.taskType = 'construction';
+            task.panelCount = undefined;
+            task.pricePerPanel = undefined;
+            task.tableSize = undefined;
+        });
     });
   }
 }
