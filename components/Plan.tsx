@@ -39,9 +39,11 @@ const TableManagementModal: React.FC<TableManagementModalProps> = ({ table, coor
     const [status, setStatus] = useState<'pending' | 'completed'>('pending');
     const [workerToAssign, setWorkerToAssign] = useState<number | ''>('');
 
-    const workers = useLiveQuery(() => db.workers.toArray());
+    // Fix: Explicitly type `workers` to resolve an inference issue where `useLiveQuery`
+    // was returning `unknown[]`, causing a type error when accessing `w.name`.
+    const workers: Worker[] | undefined = useLiveQuery(() => db.workers.toArray());
     const assignments = useLiveQuery(() => table ? db.tableAssignments.where('tableId').equals(table.id!).toArray() : [], [table]);
-    const workerMap = useMemo(() => new Map(workers?.map(w => [w.id!, w])), [workers]);
+    const workerMap = useMemo(() => new Map(workers?.map(w => [w.id!, w]) || []), [workers]);
     
     useEffect(() => {
         if (table) {

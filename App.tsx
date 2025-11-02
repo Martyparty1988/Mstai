@@ -13,12 +13,9 @@ import Plan from './components/Plan';
 import Reports from './components/Reports';
 import Attendance from './components/Attendance';
 import ProjectFinder from './components/ProjectFinder';
-import ImageAnalyzer from './components/ImageAnalyzer';
 import SplashScreen from './components/SplashScreen';
 import Login from './components/Login';
 import DataImporter from './components/DataImporter';
-import ImageEditor from './components/ImageEditor';
-import ImageGenerator from './components/ImageGenerator';
 
 const App: React.FC = () => {
   const { isAuthenticated, login } = useAuth();
@@ -57,9 +54,6 @@ const App: React.FC = () => {
           <Route path="/attendance" element={<Attendance />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/project-finder" element={<ProjectFinder />} />
-          <Route path="/image-analyzer" element={<ImageAnalyzer />} />
-          <Route path="/image-editor" element={<ImageEditor />} />
-          <Route path="/image-generator" element={<ImageGenerator />} />
           <Route path="/import" element={<DataImporter />} />
           <Route path="*" element={<Navigate to="/" />} />
         </Routes>

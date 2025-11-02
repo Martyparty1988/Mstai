@@ -57,9 +57,6 @@ const Dashboard: React.FC = () => {
 
     const aiTools = [
       { to: '/project-finder', label: t('project_finder'), icon: <SearchIcon className="w-16 h-16" /> },
-      { to: '/image-analyzer', label: t('image_analyzer'), icon: <EyeIcon className="w-16 h-16" /> },
-      { to: '/image-editor', label: t('image_editor'), icon: <PencilIcon className="w-16 h-16" /> },
-      { to: '/image-generator', label: t('image_generator'), icon: <ImageIcon className="w-16 h-16" /> },
     ];
     
     const adminTools = [
