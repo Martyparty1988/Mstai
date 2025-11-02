@@ -123,6 +123,14 @@
       .admin-indicator {
         box-shadow: inset 0 3px 0 0 var(--color-primary);
       }
+
+      @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+      .page-fade-in {
+        animation: fadeIn 0.4s ease-out forwards;
+      }
       
       @supports (padding-top: env(safe-area-inset-top)) {
         .safe-sidebar-padding {

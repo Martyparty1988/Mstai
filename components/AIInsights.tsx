@@ -1,6 +1,4 @@
 
-
-
 import React, { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { GoogleGenAI } from '@google/genai';
@@ -13,6 +11,7 @@ const AIInsights: React.FC = () => {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [result, setResult] = useState<string | null>(null);
+    const [isThinkingMode, setIsThinkingMode] = useState(false);
 
     // Fetch all necessary data for the AI context
     const workers = useLiveQuery(() => db.workers.toArray());
@@ -74,6 +73,11 @@ const AIInsights: React.FC = () => {
             const response = await ai.models.generateContent({
                 model: 'gemini-2.5-pro',
                 contents: fullPrompt,
+                ...(isThinkingMode && {
+                    config: {
+                        thinkingConfig: { thinkingBudget: 32768 }
+                    }
+                })
             });
 
             setResult(response.text);
@@ -105,6 +109,25 @@ const AIInsights: React.FC = () => {
                         {loading ? t('generating') : t('generate_insight')}
                     </button>
                 </form>
+                <div className="p-4 pt-0">
+                    <label htmlFor="thinking-mode-toggle" className="flex items-center cursor-pointer">
+                        <div className="relative">
+                            <input
+                                type="checkbox"
+                                id="thinking-mode-toggle"
+                                className="peer sr-only"
+                                checked={isThinkingMode}
+                                onChange={() => setIsThinkingMode(!isThinkingMode)}
+                            />
+                            <div className="block bg-gray-600 w-14 h-8 rounded-full peer-checked:bg-[var(--color-primary)] transition"></div>
+                            <div className="dot absolute left-1 top-1 bg-white w-6 h-6 rounded-full transition-transform peer-checked:translate-x-full"></div>
+                        </div>
+                        <div className="ml-3 text-white">
+                            <div className="font-bold">{t('thinking_mode')}</div>
+                            <div className="text-sm text-gray-400">{t('thinking_mode_desc')}</div>
+                        </div>
+                    </label>
+                </div>
             </div>
 
             {loading && (

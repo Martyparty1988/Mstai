@@ -214,7 +214,10 @@ const AICommandBar: React.FC = () => {
             const response = await ai.models.generateContent({
                 model: 'gemini-2.5-pro',
                 contents: `Context: Today's date is ${today}. The available workers are: ${workers?.map(w => w.name).join(', ')}. The available projects are: ${projects?.map(p => p.name).join(', ')}. User command: "${prompt}"`,
-                config: { tools }
+                config: {
+                    tools,
+                    thinkingConfig: { thinkingBudget: 32768 },
+                }
             });
 
             const functionCalls = response.functionCalls;
@@ -273,8 +276,8 @@ const AICommandBar: React.FC = () => {
     };
 
     return (
-        <div className="fixed bottom-0 left-0 right-0 z-20 md:left-72 main-safe-area !pt-0 !pb-4">
-            <div className="relative p-2 bg-black/20 backdrop-blur-2xl rounded-2xl border border-white/10 shadow-2xl">
+        <div className="fixed bottom-0 left-0 right-0 z-20 main-safe-area !pt-0 !pb-4">
+            <div className="relative p-2 bg-black/20 backdrop-blur-2xl rounded-2xl border border-white/10 shadow-2xl max-w-4xl mx-auto">
                 {statusMessage && (
                     <div className="absolute bottom-full left-1/2 -translate-x-1/2 w-auto mb-2 px-4 py-2 bg-black/50 rounded-lg text-white text-sm whitespace-nowrap">
                         {statusMessage}

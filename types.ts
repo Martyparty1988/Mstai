@@ -85,3 +85,17 @@ export interface ProjectComponent {
   name: string;
   description: string;
 }
+
+export interface AnnotationPath {
+  color: string;
+  strokeWidth: number;
+  points: { x: number; y: number }[];
+  tool: 'pencil' | 'eraser';
+}
+
+export interface PlanAnnotation {
+  id?: number;
+  projectId: number;
+  page: number;
+  paths: AnnotationPath[];
+}

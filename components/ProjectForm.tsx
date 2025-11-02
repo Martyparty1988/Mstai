@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { db } from '../services/db';
 import type { Project, ProjectTask, ProjectComponent, SolarTable } from '../types';
@@ -145,6 +146,7 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ project, onClose }) => {
             config: {
                 responseMimeType: 'application/json',
                 responseSchema,
+                thinkingConfig: { thinkingBudget: 32768 },
             },
         });
 
@@ -223,6 +225,7 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ project, onClose }) => {
             config: {
                 responseMimeType: 'application/json',
                 responseSchema,
+                thinkingConfig: { thinkingBudget: 32768 },
             },
         });
 
@@ -373,6 +376,9 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ project, onClose }) => {
       const response = await ai.models.generateContent({
         model: 'gemini-2.5-pro',
         contents: prompt,
+        config: {
+            thinkingConfig: { thinkingBudget: 32768 },
+        }
       });
 
       const generatedTasks = parseTaskList(response.text);

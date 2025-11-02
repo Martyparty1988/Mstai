@@ -26,6 +26,9 @@ const ImageEditor: React.FC = () => {
         const file = e.target.files?.[0];
         if (file) {
             setOriginalImageFile(file);
+            if (originalImageUrl) {
+                URL.revokeObjectURL(originalImageUrl);
+            }
             setOriginalImageUrl(URL.createObjectURL(file));
             setEditedImageUrl(null);
             setError(null);
@@ -97,11 +100,14 @@ const ImageEditor: React.FC = () => {
         const file = e.dataTransfer.files?.[0];
         if (file && file.type.startsWith('image/')) {
             setOriginalImageFile(file);
+            if (originalImageUrl) {
+                URL.revokeObjectURL(originalImageUrl);
+            }
             setOriginalImageUrl(URL.createObjectURL(file));
             setEditedImageUrl(null);
             setError(null);
         }
-    }, []);
+    }, [originalImageUrl]);
 
     const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
         e.preventDefault();

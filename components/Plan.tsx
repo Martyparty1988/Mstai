@@ -2,7 +2,15 @@ import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../services/db';
 import { useI18n } from '../contexts/I18nContext';
-import type { Project, SolarTable, TableAssignment, Worker } from '../types';
+import type { Project, SolarTable, TableAssignment, Worker, AnnotationPath, PlanAnnotation } from '../types';
+import CheckCircleIcon from './icons/CheckCircleIcon';
+import ClockIcon from './icons/ClockIcon';
+import PencilSwooshIcon from './icons/PencilSwooshIcon';
+import EraserIcon from './icons/EraserIcon';
+import UndoIcon from './icons/UndoIcon';
+import RedoIcon from './icons/RedoIcon';
+import TrashIcon from './icons/TrashIcon';
+import ColorSwatchIcon from './icons/ColorSwatchIcon';
 
 declare const pdfjsLib: any;
 
@@ -31,12 +39,9 @@ const TableManagementModal: React.FC<TableManagementModalProps> = ({ table, coor
     const [status, setStatus] = useState<'pending' | 'completed'>('pending');
     const [workerToAssign, setWorkerToAssign] = useState<number | ''>('');
 
-    const assignments = useLiveQuery(() => table ? db.tableAssignments.where('tableId').equals(table.id!).toArray() : undefined, [table?.id]);
-    const allWorkers = useLiveQuery(() => db.workers.toArray());
-
-    const assignedWorkerIds = useMemo(() => assignments?.map(a => a.workerId) || [], [assignments]);
-    const unassignedWorkers = useMemo(() => allWorkers?.filter(w => !assignedWorkerIds.includes(w.id!)), [allWorkers, assignedWorkerIds]);
-    const assignedWorkers = useMemo(() => allWorkers?.filter(w => assignedWorkerIds.includes(w.id!)), [allWorkers, assignedWorkerIds]);
+    const workers = useLiveQuery(() => db.workers.toArray());
+    const assignments = useLiveQuery(() => table ? db.tableAssignments.where('tableId').equals(table.id!).toArray() : [], [table]);
+    const workerMap = useMemo(() => new Map(workers?.map(w => [w.id!, w])), [workers]);
     
     useEffect(() => {
         if (table) {
@@ -46,44 +51,37 @@ const TableManagementModal: React.FC<TableManagementModalProps> = ({ table, coor
         }
     }, [table]);
 
-    const handleAssignWorker = async () => {
-        if (!table?.id || !workerToAssign) return;
-        await db.tableAssignments.add({ tableId: table.id, workerId: Number(workerToAssign) });
-        setWorkerToAssign('');
-    };
-
-    const handleUnassignWorker = async (workerId: number) => {
-        if (!table?.id) return;
-        const assignment = await db.tableAssignments.where({ tableId: table.id, workerId }).first();
-        if (assignment) {
-            await db.tableAssignments.delete(assignment.id!);
-        }
-    };
-
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         
-        if (!tableCode) {
-            alert("Table code is required.");
-            return;
-        }
+        const getTableTypeFromCode = (code: string): 'small' | 'medium' | 'large' => {
+            const c = code.toLowerCase();
+            if (c.startsWith('it28')) return 'small';
+            if (c.startsWith('it42')) return 'medium';
+            if (c.startsWith('it56')) return 'large';
+            return tableType; // Keep existing type if not determinable
+        };
 
         if (table?.id) {
-            await db.solarTables.update(table.id, { tableCode, tableType, status });
+            await db.solarTables.update(table.id, { 
+                tableCode, 
+                tableType: getTableTypeFromCode(tableCode),
+                status 
+            });
         } else if (coords) {
-            const newTable: Omit<SolarTable, 'id'> = {
+            const tableData: Omit<SolarTable, 'id'> = {
                 projectId,
                 x: coords.x,
                 y: coords.y,
                 tableCode,
-                tableType,
-                status: 'pending',
+                tableType: getTableTypeFromCode(tableCode),
+                status,
             };
-            await db.solarTables.add(newTable as SolarTable);
+            await db.solarTables.add(tableData as SolarTable);
         }
         onClose();
     };
-
+    
     const handleDelete = async () => {
         if (table?.id && window.confirm(t('confirm_delete'))) {
             await db.transaction('rw', db.solarTables, db.tableAssignments, async () => {
@@ -93,30 +91,45 @@ const TableManagementModal: React.FC<TableManagementModalProps> = ({ table, coor
             onClose();
         }
     };
+    
+    const handleAssignWorker = async () => {
+        if (!table || !workerToAssign) return;
+        const assignment = { tableId: table.id!, workerId: Number(workerToAssign) };
+        const existing = await db.tableAssignments.where(assignment).first();
+        if(!existing) {
+             await db.tableAssignments.add(assignment);
+        }
+        setWorkerToAssign('');
+    };
+    
+    const handleUnassignWorker = async (assignmentId: number) => {
+        await db.tableAssignments.delete(assignmentId);
+    };
 
     return (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 backdrop-blur-lg p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-lg p-4">
             <div className="w-full max-w-lg p-8 bg-black/20 backdrop-blur-2xl rounded-3xl shadow-xl border border-white/10 max-h-[90vh] overflow-y-auto">
                 <h2 className="text-3xl font-bold mb-6 text-white">{table ? t('edit_table') : t('add_table')}</h2>
-                <form onSubmit={handleSubmit} noValidate className="space-y-6">
+                <form onSubmit={handleSubmit} className="space-y-6">
                     <div>
-                        <label htmlFor="tableCode" className="block text-lg font-medium text-gray-300 mb-2">{t('table_code')}</label>
+                        <label htmlFor="table-code" className="block text-lg font-medium text-gray-300 mb-2">{t('table_code')}</label>
                         <input
                             type="text"
-                            id="tableCode"
+                            id="table-code"
                             value={tableCode}
-                            onChange={(e) => setTableCode(e.target.value)}
-                            placeholder={t('table_code_placeholder')}
+                            onChange={e => setTableCode(e.target.value)}
                             required
                             className="mt-1 block w-full p-4 bg-black/20 text-white placeholder-gray-400 border border-white/20 rounded-xl focus:ring-blue-400 focus:border-blue-400 text-lg"
+                            placeholder={t('table_code_placeholder')}
                         />
                     </div>
-                     <div>
-                        <label htmlFor="tableType" className="block text-lg font-medium text-gray-300 mb-2">{t('table_type')}</label>
+
+                    <div>
+                        <label htmlFor="table-type" className="block text-lg font-medium text-gray-300 mb-2">{t('table_type')}</label>
                         <select
-                            id="tableType"
+                            id="table-type"
                             value={tableType}
-                            onChange={(e) => setTableType(e.target.value as 'small' | 'medium' | 'large')}
+                            onChange={e => setTableType(e.target.value as 'small' | 'medium' | 'large')}
                             className="mt-1 block w-full p-4 bg-black/20 text-white border border-white/20 rounded-xl focus:ring-blue-400 focus:border-blue-400 text-lg [&>option]:bg-gray-800"
                         >
                             <option value="small">{t('small')}</option>
@@ -125,52 +138,47 @@ const TableManagementModal: React.FC<TableManagementModalProps> = ({ table, coor
                         </select>
                     </div>
 
+                    <div>
+                        <label htmlFor="table-status" className="block text-lg font-medium text-gray-300 mb-2">{t('status')}</label>
+                        <select
+                            id="table-status"
+                            value={status}
+                            onChange={e => setStatus(e.target.value as 'pending' | 'completed')}
+                            className="mt-1 block w-full p-4 bg-black/20 text-white border border-white/20 rounded-xl focus:ring-blue-400 focus:border-blue-400 text-lg [&>option]:bg-gray-800"
+                        >
+                            <option value="pending">{t('pending')}</option>
+                            <option value="completed">{t('completed')}</option>
+                        </select>
+                    </div>
+
                     {table && (
-                        <>
-                            <div>
-                                <label htmlFor="status" className="block text-lg font-medium text-gray-300 mb-2">{t('status')}</label>
-                                <select
-                                    id="status"
-                                    value={status}
-                                    onChange={(e) => setStatus(e.target.value as 'pending' | 'completed')}
-                                    className="mt-1 block w-full p-4 bg-black/20 text-white border border-white/20 rounded-xl focus:ring-blue-400 focus:border-blue-400 text-lg [&>option]:bg-gray-800"
-                                >
-                                    <option value="pending">{t('pending')}</option>
-                                    <option value="completed">{t('completed')}</option>
-                                </select>
-                            </div>
-
-                             <div className="space-y-4 pt-4 border-t border-white/10">
-                                <h3 className="text-xl font-bold text-white">{t('assigned_workers')}</h3>
-                                {assignedWorkers && assignedWorkers.length > 0 ? (
-                                    <ul className="space-y-2">
-                                        {assignedWorkers.map(worker => (
-                                            <li key={worker.id} className="flex justify-between items-center p-2 bg-white/5 rounded-lg">
-                                                <span className="text-gray-200">{worker.name}</span>
-                                                <button type="button" onClick={() => handleUnassignWorker(worker.id!)} className="text-pink-500 hover:underline text-sm font-bold">{t('unassign')}</button>
-                                            </li>
-                                        ))}
-                                    </ul>
-                                ) : <p className="text-gray-400">{t('no_data')}</p>}
-
-                                {unassignedWorkers && unassignedWorkers.length > 0 && (
-                                    <div className="flex gap-2">
-                                        <select value={workerToAssign} onChange={e => setWorkerToAssign(Number(e.target.value))} className="flex-grow p-2 bg-black/20 text-white border border-white/20 rounded-lg focus:ring-blue-400 focus:border-blue-400 [&>option]:bg-gray-800">
-                                            <option value="" disabled>{t('select_worker')}</option>
-                                            {unassignedWorkers.map(w => <option key={w.id} value={w.id!}>{w.name}</option>)}
-                                        </select>
-                                        <button type="button" onClick={handleAssignWorker} disabled={!workerToAssign} className="px-4 bg-cyan-600 text-white font-bold rounded-lg hover:bg-cyan-500 disabled:opacity-50">{t('assign_worker')}</button>
+                        <div>
+                            <label className="block text-lg font-medium text-gray-300 mb-2">{t('assigned_workers')}</label>
+                            <div className="space-y-2 mb-4 max-h-32 overflow-y-auto">
+                                {assignments?.map(a => (
+                                    <div key={a.id} className="flex justify-between items-center p-2 bg-white/10 rounded-lg">
+                                        <span className="text-gray-200">{workerMap.get(a.workerId)?.name || '...'}</span>
+                                        <button type="button" onClick={() => handleUnassignWorker(a.id!)} className="text-pink-400 hover:underline text-sm font-bold">{t('unassign')}</button>
                                     </div>
-                                )}
+                                ))}
                             </div>
-                        </>
+                            <div className="flex gap-2">
+                                <select value={workerToAssign} onChange={e => setWorkerToAssign(Number(e.target.value))} className="flex-grow p-3 bg-black/20 text-white border border-white/20 rounded-xl [&>option]:bg-gray-800">
+                                    <option value="" disabled>{t('select_worker')}</option>
+                                    {workers?.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+                                </select>
+                                <button type="button" onClick={handleAssignWorker} className="px-4 bg-[var(--color-primary)] text-white font-bold rounded-xl">{t('add')}</button>
+                            </div>
+                        </div>
                     )}
-                    
+
                     <div className="flex justify-between items-center pt-4">
-                        <div>{table && <button type="button" onClick={handleDelete} className="px-6 py-3 bg-pink-600/80 text-white font-bold rounded-xl hover:bg-pink-600 transition-colors text-lg">{t('delete')}</button>}</div>
+                        <div>
+                           {table && <button type="button" onClick={handleDelete} className="px-6 py-3 bg-pink-600/80 text-white font-bold rounded-xl hover:bg-pink-600 transition-colors">{t('delete')}</button>}
+                        </div>
                         <div className="flex justify-end space-x-4">
-                            <button type="button" onClick={onClose} className="px-6 py-3 bg-white/10 text-white font-bold rounded-xl hover:bg-white/20 transition-colors text-lg">{t('cancel')}</button>
-                            <button type="submit" className="px-6 py-3 bg-[var(--color-primary)] text-white font-bold rounded-xl hover:bg-[var(--color-primary-hover)] transition-all shadow-md text-lg">{t('save')}</button>
+                            <button type="button" onClick={onClose} className="px-6 py-3 bg-white/10 text-white font-bold rounded-xl hover:bg-white/20 transition-colors">{t('cancel')}</button>
+                            <button type="submit" className="px-6 py-3 bg-[var(--color-primary)] text-white font-bold rounded-xl hover:bg-[var(--color-primary-hover)]">{t('save')}</button>
                         </div>
                     </div>
                 </form>
@@ -179,488 +187,512 @@ const TableManagementModal: React.FC<TableManagementModalProps> = ({ table, coor
     );
 };
 
-// --- Main Plan Component ---
-const Plan: React.FC = () => {
+
+// --- Plan View ---
+interface PlanViewProps {
+    project: Project;
+    solarTables: SolarTable[];
+    assignments: TableAssignment[];
+    workers: Worker[];
+    annotations: PlanAnnotation | undefined;
+}
+const PlanView: React.FC<PlanViewProps> = ({ project, solarTables, assignments, workers, annotations }) => {
     const { t } = useI18n();
-    const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
-    const [view, setView] = useState<'plan' | 'registry'>('plan');
-    const [modalState, setModalState] = useState<{ isOpen: boolean; coords?: { x: number; y: number }; table?: SolarTable; }>({ isOpen: false });
-    const planContentRef = useRef<HTMLDivElement>(null);
-    const [planStatus, setPlanStatus] = useState<'idle' | 'loading' | 'error' | 'loaded' | 'no-plan'>('idle');
-    const [zoom, setZoom] = useState(1);
-    const draggedMarkerRef = useRef<{ id: number; table: SolarTable; offsetX: number; offsetY: number; hasDragged: boolean } | null>(null);
-    const [aiPlanUrl, setAiPlanUrl] = useState<string | null>(null);
-
+    const planContainerRef = useRef<HTMLDivElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
-    const renderTaskRef = useRef<any>(null);
-    const [pdfDoc, setPdfDoc] = useState<any>(null);
-    const [pageNum, setPageNum] = useState(1);
-    const [totalPages, setTotalPages] = useState(0);
+    const drawingCanvasRef = useRef<HTMLCanvasElement>(null);
 
-    const projects = useLiveQuery(() => db.projects.toArray());
-    const allWorkers = useLiveQuery(() => db.workers.toArray());
-    const selectedProject = useLiveQuery(() => selectedProjectId ? db.projects.get(selectedProjectId) : undefined, [selectedProjectId]);
-    const tables = useLiveQuery(() => selectedProjectId ? db.solarTables.where('projectId').equals(selectedProjectId).toArray() : [], [selectedProjectId]);
+    const [planImage, setPlanImage] = useState<string | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    const [selectedTable, setSelectedTable] = useState<SolarTable | null>(null);
+    const [modalCoords, setModalCoords] = useState<{x: number, y: number} | null>(null);
+
+    const [isDrawing, setIsDrawing] = useState(false);
+    const [drawingMode, setDrawingMode] = useState(false);
+    const [tool, setTool] = useState<'pencil' | 'eraser'>('pencil');
+    const [color, setColor] = useState('#ef4444');
+    const [strokeWidth, setStrokeWidth] = useState(5);
+    const [history, setHistory] = useState<AnnotationPath[]>([]);
+    const [redoStack, setRedoStack] = useState<AnnotationPath[]>([]);
     
-    const tableIds = useMemo(() => tables?.map(t => t.id!) || [], [tables]);
-    const assignments = useLiveQuery(() => tableIds.length > 0 ? db.tableAssignments.where('tableId').anyOf(tableIds).toArray() : [], [tableIds]);
-    
-    const assignmentCountMap = useMemo(() => {
-        const map = new Map<number, number>();
-        if (!assignments) return map;
-        for (const assignment of assignments) {
-            map.set(assignment.tableId, (map.get(assignment.tableId) || 0) + 1);
-        }
-        return map;
-    }, [assignments]);
-    
-    const tableIdToFirstWorkerIdMap = useMemo(() => {
-        const map = new Map<number, number>();
-        if (!assignments) return map;
-
-        const sortedAssignments = [...assignments].sort((a, b) => a.id! - b.id!);
-
-        for (const assignment of sortedAssignments) {
-            if (!map.has(assignment.tableId)) {
-                map.set(assignment.tableId, assignment.workerId);
-            }
-        }
-        return map;
-    }, [assignments]);
-
-    const workerWorkload = useMemo(() => {
-        const workload = new Map<number, number>();
-        if (!assignments) return workload;
-
-        for (const assignment of assignments) {
-            workload.set(assignment.workerId, (workload.get(assignment.workerId) || 0) + 1);
-        }
-        return workload;
-    }, [assignments]);
-
-    const assignedWorkerIds = useMemo(() => [...new Set(assignments?.map(a => a.workerId) || [])], [assignments]);
-
-    const assignedWorkers = useMemo(() => {
-        if (!allWorkers || assignedWorkerIds.length === 0) return [];
-        const workerMap = new Map(allWorkers.map(w => [w.id!, w]));
-        return assignedWorkerIds.map(id => workerMap.get(id)).filter(Boolean) as Worker[];
-    }, [allWorkers, assignedWorkerIds]);
-
-    useEffect(() => {
-        pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js`;
-    }, []);
-
-    const renderPage = useCallback(async (pdf: any, pageNumber: number) => {
-        if (!canvasRef.current) return;
-    
-        try {
-            const page = await pdf.getPage(pageNumber);
-            const viewport = page.getViewport({ scale: zoom });
-            const canvas = canvasRef.current;
-            const context = canvas.getContext('2d');
-            
-            canvas.height = viewport.height;
-            canvas.width = viewport.width;
-    
-            const renderContext = { canvasContext: context, viewport };
-            const task = page.render(renderContext);
-            renderTaskRef.current = task;
-            
-            await task.promise;
-        } catch (err: any) {
-            if (err.name !== 'RenderingCancelledException') {
-                console.error('PDF render failed:', err);
-                setPlanStatus('error');
-            }
-        }
-    }, [zoom]);
-
-    useEffect(() => {
-        setAiPlanUrl(null);
-        setPdfDoc(null);
-        setPlanStatus(selectedProjectId ? 'loading' : 'idle');
-    
-        if (!selectedProject) return;
-
-        if (selectedProject.aiPlanFile) {
-            const url = URL.createObjectURL(selectedProject.aiPlanFile);
-            setAiPlanUrl(url);
-            setPlanStatus('loaded');
-            return () => URL.revokeObjectURL(url);
-        }
-    
-        if (selectedProject.planFile) {
-            const loadPdf = async () => {
-                const arrayBuffer = await selectedProject.planFile!.arrayBuffer();
-                const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
-                try {
-                    const pdf = await loadingTask.promise;
-                    setPdfDoc(pdf);
-                    setTotalPages(pdf.numPages);
-                    setPageNum(1);
-                    setPlanStatus('loaded');
-                } catch (error) {
-                    console.error("Failed to load PDF:", error);
-                    setPlanStatus('error');
-                }
-            };
-            loadPdf();
-        } else {
-            setPlanStatus('no-plan');
-        }
-    
-        return () => {
-            if (renderTaskRef.current) {
-                renderTaskRef.current.cancel();
-            }
-        };
-    }, [selectedProject, selectedProjectId]);
-    
-    useEffect(() => {
-        if (planStatus === 'loaded' && pdfDoc && !aiPlanUrl) {
-            renderPage(pdfDoc, pageNum);
-        }
-    }, [planStatus, pdfDoc, pageNum, renderPage, aiPlanUrl]);
-
-    const handlePlanClick = (e: React.MouseEvent<HTMLDivElement>) => {
-        if ((e.target as HTMLElement).closest('[id^="marker-"]')) return;
-        if (!planContentRef.current) return;
-        const rect = planContentRef.current.getBoundingClientRect();
-        const x = (e.clientX - rect.left) / rect.width * 100;
-        const y = (e.clientY - rect.top) / rect.height * 100;
-        setModalState({ isOpen: true, coords: { x, y } });
-    };
-
-    const handleMouseMove = useCallback((e: MouseEvent) => {
-        if (!draggedMarkerRef.current || !planContentRef.current) return;
-        draggedMarkerRef.current.hasDragged = true;
-        
-        const markerElem = document.getElementById(`marker-${draggedMarkerRef.current.id}`);
-        const container = planContentRef.current;
-        if (!markerElem || !container) return;
-        
-        const containerRect = container.getBoundingClientRect();
-        
-        const newLeftPx = e.clientX - containerRect.left - draggedMarkerRef.current.offsetX;
-        const newTopPx = e.clientY - containerRect.top - draggedMarkerRef.current.offsetY;
-        
-        const markerWidth = markerElem.offsetWidth;
-        const markerHeight = markerElem.offsetHeight;
-        
-        const markerCenterX = newLeftPx + markerWidth / 2;
-        const markerCenterY = newTopPx + markerHeight / 2;
-    
-        let centerXPercent = (markerCenterX / containerRect.width) * 100;
-        let centerYPercent = (markerCenterY / containerRect.height) * 100;
-    
-        const halfWidthPercent = (markerWidth / 2 / containerRect.width) * 100;
-        const halfHeightPercent = (markerHeight / 2 / containerRect.height) * 100;
-        centerXPercent = Math.max(halfWidthPercent, Math.min(centerXPercent, 100 - halfWidthPercent));
-        centerYPercent = Math.max(halfHeightPercent, Math.min(centerYPercent, 100 - halfHeightPercent));
-    
-        markerElem.style.left = `${centerXPercent}%`;
-        markerElem.style.top = `${centerYPercent}%`;
-    }, []);
-
-    const handleMouseUp = useCallback(async () => {
-        if (!draggedMarkerRef.current) return;
-    
-        if (draggedMarkerRef.current.hasDragged) {
-            const markerElem = document.getElementById(`marker-${draggedMarkerRef.current.id}`);
-            if (markerElem) {
-                const finalX = parseFloat(markerElem.style.left);
-                const finalY = parseFloat(markerElem.style.top);
-                await db.solarTables.update(draggedMarkerRef.current.id, { x: finalX, y: finalY });
-            }
-        } else {
-            setModalState({ isOpen: true, table: draggedMarkerRef.current.table });
-        }
-    
-        window.removeEventListener('mousemove', handleMouseMove);
-        window.removeEventListener('mouseup', handleMouseUp);
-        draggedMarkerRef.current = null;
-    }, [handleMouseMove, setModalState]);
-
-    const handleMarkerMouseDown = useCallback((e: React.MouseEvent, table: SolarTable) => {
-        e.preventDefault();
-        e.stopPropagation();
-        
-        const target = e.currentTarget as HTMLDivElement;
-        const rect = target.getBoundingClientRect();
-        
-        draggedMarkerRef.current = {
-            id: table.id!,
-            table: table,
-            offsetX: e.clientX - rect.left,
-            offsetY: e.clientY - rect.top,
-            hasDragged: false
-        };
-
-        window.addEventListener('mousemove', handleMouseMove);
-        window.addEventListener('mouseup', handleMouseUp);
-    }, [handleMouseMove, handleMouseUp]);
-    
-    const handleStatusToggle = async (table: SolarTable) => {
-        const newStatus = table.status === 'pending' ? 'completed' : 'pending';
-        await db.solarTables.update(table.id!, { status: newStatus });
-    };
-
-    const getTableMarkerStyle = (table: SolarTable): React.CSSProperties => {
-        const firstWorkerId = tableIdToFirstWorkerIdMap.get(table.id!);
-        const workload = firstWorkerId ? workerWorkload.get(firstWorkerId) || 1 : 1;
-        
-        const baseSize = 28;
-        const scale = 1 + Math.log1p(workload) * 0.4;
-        const scaledSize = baseSize * scale;
-
-        let backgroundColor = '#6b7280'; // Gray for unassigned
-        if (firstWorkerId) {
-            backgroundColor = getWorkerColor(firstWorkerId);
-        }
-
-        const baseStyle: React.CSSProperties = {
-            position: 'absolute',
-            transform: 'translate(-50%, -50%)',
-            cursor: 'grab',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: 'white',
-            fontWeight: 'bold',
-            transition: 'all 0.2s ease-in-out',
-            opacity: table.status === 'completed' ? 0.65 : 1,
-            boxShadow: `0 2px 10px rgba(0, 0, 0, 0.6), 0 0 ${Math.min(workload * 3, 35)}px ${backgroundColor}`,
-            border: '2px solid white',
-            width: `${scaledSize}px`,
-            height: `${scaledSize}px`,
-        };
-        
-        switch (table.tableType) {
-            case 'small':
-                return { ...baseStyle, borderRadius: '50%', backgroundColor };
-            case 'medium':
-                return { ...baseStyle, borderRadius: '6px', backgroundColor };
-            case 'large':
-                return { ...baseStyle, width: `${scaledSize * 1.4}px`, height: `${scaledSize * 0.85}px`, borderRadius: '6px', backgroundColor };
-            default:
-                return { ...baseStyle, backgroundColor: '#6b7280' };
-        }
-    };
-
-    const renderPlanContent = () => {
-        if (!selectedProjectId) return <p className="text-center text-gray-400">{t('select_project_to_view_plan')}</p>;
-        if (planStatus === 'loading') return <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white"></div>;
-        if (planStatus === 'error') return <p className="text-center text-red-400 font-bold">{t('plan_load_error')}</p>;
-        if (planStatus === 'no-plan') return <p className="text-center text-gray-400 font-bold">{t('no_plan_available')}</p>;
-        
-        const markers = tables?.map(table => {
-            const assignmentCount = assignmentCountMap.get(table.id!) || 0;
-            return (
-                <div
-                    key={table.id}
-                    id={`marker-${table.id!}`}
-                    style={{ left: `${table.x}%`, top: `${table.y}%`, ...getTableMarkerStyle(table) }}
-                    onMouseDown={(e) => handleMarkerMouseDown(e, table)}
-                    title={`${table.tableCode} (${t(table.status)})`}
-                    className="active:cursor-grabbing"
-                >
-                    <span className="text-[10px] pointer-events-none">
-                        {table.tableCode.split(/[-.]/).pop()}
-                    </span>
-                        {assignmentCount > 0 && (
-                        <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center border-2 border-white shadow-md">
-                            {assignmentCount}
-                        </span>
-                    )}
-                </div>
-            );
+    const workerMap = useMemo(() => new Map(workers.map(w => [w.id!, w])), [workers]);
+    const assignmentsMap = useMemo(() => {
+        const map = new Map<number, number[]>();
+        assignments.forEach(a => {
+            const workerIds = map.get(a.tableId) || [];
+            workerIds.push(a.workerId);
+            map.set(a.tableId, workerIds);
         });
-
-        if (aiPlanUrl) {
-            return (
-                <>
-                    <img src={aiPlanUrl} alt={t('plan_preview')} className="max-w-full max-h-full object-contain" />
-                    {markers}
-                </>
-            );
+        return map;
+    }, [assignments]);
+    
+    // PDF to Image rendering
+    useEffect(() => {
+        const fileToRender = project.aiPlanFile || project.planFile;
+        if (!fileToRender) {
+            setIsLoading(false);
+            setError(t('no_plan_available'));
+            return;
         }
+
+        const renderPdfToImage = async () => {
+            try {
+                const arrayBuffer = await fileToRender.arrayBuffer();
+                pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js`;
+                const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                const page = await pdf.getPage(1);
+                const viewport = page.getViewport({ scale: 2.0 });
+                
+                const canvas = canvasRef.current;
+                if (!canvas) return;
+                
+                canvas.height = viewport.height;
+                canvas.width = viewport.width;
+                const context = canvas.getContext('2d');
+                if(!context) return;
+                
+                await page.render({ canvasContext: context, viewport }).promise;
+                setPlanImage(canvas.toDataURL());
+            } catch (err) {
+                console.error('Failed to render plan', err);
+                setError(t('plan_load_error'));
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        const renderImage = () => {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                setPlanImage(e.target?.result as string);
+                setIsLoading(false);
+            };
+            reader.onerror = () => {
+                setError(t('plan_load_error'));
+                setIsLoading(false);
+            };
+            reader.readAsDataURL(fileToRender);
+        };
+        
+        setIsLoading(true);
+        setError(null);
+        if (fileToRender.type === 'application/pdf') {
+            renderPdfToImage();
+        } else if (fileToRender.type.startsWith('image/')) {
+            renderImage();
+        } else {
+             setError('Unsupported file type.');
+             setIsLoading(false);
+        }
+
+    }, [project.planFile, project.aiPlanFile, t]);
+
+    // Drawing Canvas Setup
+    const drawCanvas = useCallback(() => {
+        const canvas = drawingCanvasRef.current;
+        const ctx = canvas?.getContext('2d');
+        if (!canvas || !ctx) return;
+        
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        history.forEach(path => {
+            ctx.beginPath();
+            ctx.strokeStyle = path.color;
+            ctx.lineWidth = path.strokeWidth;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.globalCompositeOperation = path.tool === 'eraser' ? 'destination-out' : 'source-over';
+            
+            path.points.forEach((point, i) => {
+                if (i === 0) ctx.moveTo(point.x, point.y);
+                else ctx.lineTo(point.x, point.y);
+            });
+            ctx.stroke();
+        });
+        ctx.globalCompositeOperation = 'source-over'; // Reset
+    }, [history]);
+    
+    useEffect(() => {
+        if(annotations?.paths) {
+            setHistory(annotations.paths);
+        } else {
+            setHistory([]);
+        }
+        setRedoStack([]);
+    }, [annotations]);
+    
+    useEffect(() => {
+        const canvas = drawingCanvasRef.current;
+        const planDiv = planContainerRef.current;
+        if (canvas && planDiv && planImage) {
+            const img = new Image();
+            img.onload = () => {
+                canvas.width = img.width;
+                canvas.height = img.height;
+                drawCanvas();
+            };
+            img.src = planImage;
+        }
+    }, [planImage, drawCanvas]);
+
+    const startDrawing = useCallback((e: React.MouseEvent | React.TouchEvent) => {
+        if (!drawingMode) return;
+        const canvas = drawingCanvasRef.current;
+        if (!canvas) return;
+        const rect = canvas.getBoundingClientRect();
+        
+        const getCoords = (event: React.MouseEvent | React.TouchEvent) => {
+            if ('touches' in event) {
+                return {
+                    x: event.touches[0].clientX - rect.left,
+                    y: event.touches[0].clientY - rect.top,
+                };
+            }
+            return {
+                x: event.clientX - rect.left,
+                y: event.clientY - rect.top,
+            };
+        };
+
+        const { x, y } = getCoords(e);
+        
+        setIsDrawing(true);
+        setHistory(prev => [...prev, { color, strokeWidth, points: [{x, y}], tool }]);
+        setRedoStack([]);
+    }, [drawingMode, color, strokeWidth, tool]);
+    
+    const continueDrawing = useCallback((e: React.MouseEvent | React.TouchEvent) => {
+        if (!isDrawing || !drawingMode) return;
+        const canvas = drawingCanvasRef.current;
+        if (!canvas) return;
+        const rect = canvas.getBoundingClientRect();
+         
+        const getCoords = (event: React.MouseEvent | React.TouchEvent) => {
+            if ('touches' in event) {
+                return {
+                    x: event.touches[0].clientX - rect.left,
+                    y: event.touches[0].clientY - rect.top,
+                };
+            }
+            return {
+                x: event.clientX - rect.left,
+                y: event.clientY - rect.top,
+            };
+        };
+
+        const { x, y } = getCoords(e);
+
+        setHistory(prev => {
+            const newHistory = [...prev];
+            const currentPath = newHistory[newHistory.length - 1];
+            currentPath.points.push({x, y});
+            return newHistory;
+        });
+        requestAnimationFrame(drawCanvas);
+    }, [isDrawing, drawingMode, drawCanvas]);
+
+    const stopDrawing = useCallback(async () => {
+        if (!isDrawing) return;
+        setIsDrawing(false);
+        
+        // Save to DB
+        if (annotations) {
+            await db.planAnnotations.update(annotations.id!, { paths: history });
+        } else if (history.length > 0) {
+            await db.planAnnotations.add({ projectId: project.id!, page: 1, paths: history });
+        }
+    }, [isDrawing, history, annotations, project.id]);
+    
+    const handleUndo = () => {
+        if (history.length === 0) return;
+        const lastPath = history[history.length - 1];
+        setHistory(history.slice(0, -1));
+        setRedoStack(prev => [lastPath, ...prev]);
+        requestAnimationFrame(drawCanvas);
+        stopDrawing(); // Save changes after undo
+    };
+    
+    const handleRedo = () => {
+        if (redoStack.length === 0) return;
+        const nextPath = redoStack[0];
+        setHistory(prev => [...prev, nextPath]);
+        setRedoStack(redoStack.slice(1));
+        requestAnimationFrame(drawCanvas);
+        stopDrawing(); // Save changes after redo
+    };
+    
+    const handleClear = () => {
+        if (window.confirm(t('confirm_clear_drawing'))) {
+            setHistory([]);
+            setRedoStack([]);
+            requestAnimationFrame(drawCanvas);
+            stopDrawing(); // Save changes after clear
+        }
+    };
+    
+    const handlePlanClick = (e: React.MouseEvent<HTMLDivElement>) => {
+        if (drawingMode) return;
+        const rect = e.currentTarget.getBoundingClientRect();
+        const x = ((e.clientX - rect.left) / rect.width) * 100;
+        const y = ((e.clientY - rect.top) / rect.height) * 100;
+        setModalCoords({ x, y });
+    };
+
+    // Fix: Refactored SolarTableMarker to be a standard React.FC component with an explicit props interface.
+    interface SolarTableMarkerProps {
+        table: SolarTable;
+    }
+    const SolarTableMarker: React.FC<SolarTableMarkerProps> = ({ table }) => {
+        const onSelectTable = (tbl: SolarTable) => setSelectedTable(tbl);
+
+        const tableSize = useMemo(() => {
+            switch(table.tableType) {
+                case 'small': return { width: '20px', height: '20px' };
+                case 'medium': return { width: '30px', height: '20px' };
+                case 'large': return { width: '40px', height: '20px' };
+                default: return { width: '20px', height: '20px' };
+            }
+        }, [table.tableType]);
+        
+        const assignedWorkerColors = useMemo(() => {
+            const workerIds = assignmentsMap.get(table.id!) || [];
+            return workerIds.map(id => getWorkerColor(id));
+        }, [table.id]);
 
         return (
-            <>
-                <canvas ref={canvasRef} className="rounded-md shadow-lg" />
-                {markers}
-            </>
+            <div
+              className="absolute transform -translate-x-1/2 -translate-y-1/2 cursor-pointer group"
+              style={{ left: `${table.x}%`, top: `${table.y}%`, width: tableSize.width, height: tableSize.height }}
+              onClick={(e) => { e.stopPropagation(); onSelectTable(table); }}
+            >
+              <div className={`w-full h-full rounded-sm border-2 ${table.status === 'completed' ? 'border-green-600 bg-green-900/70 filter saturate-50' : 'border-yellow-400 bg-yellow-900/50'} flex items-center justify-center transition-all group-hover:scale-110`}>
+                <span className="text-white font-bold text-xs truncate px-1">{table.tableCode}</span>
+              </div>
+              {assignedWorkerColors.length > 0 && (
+                  <div className="absolute -bottom-1 -right-1 flex -space-x-1" title={t('assigned_workers')}>
+                      {assignedWorkerColors.slice(0, 3).map((color, i) => (
+                          <div key={i} style={{ backgroundColor: color }} className="w-3 h-3 rounded-full border-2 border-gray-800"></div>
+                      ))}
+                  </div>
+              )}
+               {table.status === 'completed' && (
+                <div className="absolute -top-1.5 -right-1.5 bg-green-500 rounded-full p-0.5 border-2 border-gray-800 shadow-lg" title={t('completed')}>
+                  <CheckCircleIcon className="w-3 h-3 text-white" />
+                </div>
+              )}
+            </div>
         );
     };
 
+    if (isLoading) return <div className="text-center p-12">{t('loading_plan')}</div>;
+    if (error) return <div className="text-center p-12 bg-red-900/50 rounded-lg text-red-200">{error}</div>;
+
     return (
-        <div>
-            <h1 className="text-5xl font-bold text-white [text-shadow:0_4px_12px_rgba(0,0,0,0.5)] mb-8">{t('plan')}</h1>
-
-            <div className="p-6 bg-black/20 backdrop-blur-2xl rounded-3xl border border-white/10 shadow-lg mb-8">
-                <div className="flex flex-col md:flex-row gap-4 items-center">
-                    <select
-                        title={t('select_project')}
-                        value={selectedProjectId || ''}
-                        onChange={(e) => setSelectedProjectId(e.target.value ? Number(e.target.value) : null)}
-                        className="flex-grow w-full md:w-auto p-4 bg-black/20 text-white border border-white/20 rounded-xl focus:ring-blue-400 focus:border-blue-400 text-lg [&>option]:bg-gray-800"
-                    >
-                        <option value="">{t('select_project')}</option>
-                        {projects?.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                    </select>
-                    {selectedProjectId && view === 'plan' && planStatus === 'loaded' && (
-                        <div className="flex items-center gap-4 flex-wrap">
-                             {totalPages > 1 && !aiPlanUrl && (
-                                <div className="flex items-center gap-2">
-                                    <button onClick={() => setPageNum(p => Math.max(1, p - 1))} disabled={pageNum <= 1} className="px-3 py-2 bg-white/10 text-white font-bold rounded-xl hover:bg-white/20 disabled:opacity-50 transition-colors">‹</button>
-                                    <span className="text-white font-bold">{t('page')} {pageNum} / {totalPages}</span>
-                                    <button onClick={() => setPageNum(p => Math.min(totalPages, p + 1))} disabled={pageNum >= totalPages} className="px-3 py-2 bg-white/10 text-white font-bold rounded-xl hover:bg-white/20 disabled:opacity-50 transition-colors">›</button>
-                                </div>
-                            )}
-                            <div className="flex items-center gap-2">
-                                <button onClick={() => setZoom(z => Math.max(0.5, z - 0.2))} className="px-4 py-2 bg-white/10 text-white font-bold rounded-xl hover:bg-white/20 transition-colors text-xl">{t('zoom_out')}</button>
-                                <span className="text-white font-semibold w-12 text-center">{(zoom * 100).toFixed(0)}%</span>
-                                <button onClick={() => setZoom(z => Math.min(3, z + 0.2))} className="px-4 py-2 bg-white/10 text-white font-bold rounded-xl hover:bg-white/20 transition-colors text-xl">{t('zoom_in')}</button>
-                            </div>
-                        </div>
-                    )}
-                </div>
-                {selectedProjectId && (
-                    <div className="mt-4 flex flex-col gap-4">
-                        <div className="flex gap-2">
-                            <button onClick={() => setView('plan')} className={`px-5 py-2 font-bold rounded-lg transition ${view === 'plan' ? 'bg-[var(--color-primary)] text-white' : 'bg-white/10 hover:bg-white/20'}`}>{t('plan_view')}</button>
-                            <button onClick={() => setView('registry')} className={`px-5 py-2 font-bold rounded-lg transition ${view === 'registry' ? 'bg-[var(--color-primary)] text-white' : 'bg-white/10 hover:bg-white/20'}`}>{t('table_registry')}</button>
-                        </div>
-                         <div className="flex flex-wrap gap-x-8 gap-y-4 pt-4 border-t border-white/10">
-                            {assignedWorkers.length > 0 && (
-                                <div>
-                                <h3 className="text-sm font-bold text-gray-300 uppercase tracking-wider mb-2">{t('assigned_workers_legend')}</h3>
-                                <div className="flex flex-wrap gap-4">
-                                    {assignedWorkers.map(worker => (
-                                    <div key={worker.id} className="flex items-center gap-2">
-                                        <div className="w-4 h-4 rounded-full" style={{ backgroundColor: getWorkerColor(worker.id!) }}></div>
-                                        <span className="text-white text-sm">{worker.name}</span>
-                                    </div>
-                                    ))}
-                                </div>
-                                </div>
-                            )}
-                            <div>
-                                <h3 className="text-sm font-bold text-gray-300 uppercase tracking-wider mb-2">{t('table_type_legend')}</h3>
-                                <div className="flex flex-wrap gap-4">
-                                <div className="flex items-center gap-2">
-                                    <div className="w-4 h-4 rounded-full bg-gray-500"></div>
-                                    <span className="text-white text-sm">{t('small_table')}</span>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    <div className="w-4 h-4 rounded-sm bg-gray-500"></div>
-                                    <span className="text-white text-sm">{t('medium_table')}</span>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    <div className="w-6 h-4 rounded-sm bg-gray-500"></div>
-                                    <span className="text-white text-sm">{t('large_table')}</span>
-                                </div>
-                                </div>
-                            </div>
-                        </div>
+        <div className="relative">
+            {drawingMode && (
+                <div className="absolute top-0 left-1/2 -translate-x-1/2 z-20 p-2 bg-black/50 backdrop-blur-md rounded-b-xl flex items-center gap-4">
+                    <button onClick={() => setTool('pencil')} className={`p-2 rounded-full ${tool === 'pencil' ? 'bg-[var(--color-primary)]' : 'hover:bg-white/10'}`} title={t('pencil')}><PencilSwooshIcon className="w-6 h-6"/></button>
+                    <button onClick={() => setTool('eraser')} className={`p-2 rounded-full ${tool === 'eraser' ? 'bg-[var(--color-primary)]' : 'hover:bg-white/10'}`} title={t('eraser')}><EraserIcon className="w-6 h-6"/></button>
+                    <div className="flex items-center gap-2">
+                        <ColorSwatchIcon className="w-6 h-6"/>
+                        <input type="color" value={color} onChange={e => setColor(e.target.value)} className="w-8 h-8 bg-transparent border-none cursor-pointer"/>
                     </div>
-                )}
+                    <div className="flex items-center gap-2">
+                        <label htmlFor="stroke-width" className="text-sm font-bold">{t('stroke_width')}</label>
+                        <input type="range" id="stroke-width" min="1" max="50" value={strokeWidth} onChange={e => setStrokeWidth(Number(e.target.value))} />
+                    </div>
+                    <button onClick={handleUndo} className="p-2 rounded-full hover:bg-white/10" title={t('undo')}><UndoIcon className="w-6 h-6"/></button>
+                    <button onClick={handleRedo} className="p-2 rounded-full hover:bg-white/10" title={t('redo')}><RedoIcon className="w-6 h-6"/></button>
+                    <button onClick={handleClear} className="p-2 rounded-full hover:bg-white/10" title={t('clear_drawing')}><TrashIcon className="w-6 h-6"/></button>
+                </div>
+            )}
+            <div
+                ref={planContainerRef}
+                className="relative w-full h-auto overflow-auto bg-gray-800/30 rounded-lg"
+                onClick={handlePlanClick}
+                onMouseDown={startDrawing}
+                onMouseMove={continueDrawing}
+                onMouseUp={stopDrawing}
+                onMouseLeave={stopDrawing}
+                onTouchStart={startDrawing}
+                onTouchMove={continueDrawing}
+                onTouchEnd={stopDrawing}
+            >
+                <img src={planImage!} alt="Project Plan" className="max-w-full h-auto block" style={{ opacity: drawingMode ? 0.7 : 1 }} />
+                <canvas ref={drawingCanvasRef} className="absolute top-0 left-0" style={{ pointerEvents: 'none' }} />
+                <canvas ref={canvasRef} className="hidden" />
+                {!drawingMode && solarTables.map(table => <SolarTableMarker key={table.id} table={table} />)}
             </div>
-
-            {view === 'plan' && (
-                 <div className="w-full h-[600px] bg-black/20 backdrop-blur-2xl rounded-3xl border border-white/10 shadow-lg overflow-auto flex justify-center items-start p-2">
-                    <div 
-                        ref={planContentRef}
-                        className="relative w-fit h-fit transition-transform duration-200"
-                        style={{ cursor: planStatus === 'loaded' ? 'copy' : 'default', transform: `scale(${zoom})` }}
-                        onClick={planStatus === 'loaded' ? handlePlanClick : undefined}
-                        title={planStatus === 'loaded' ? t('click_plan_to_add_table') : ''}
-                    >
-                        {renderPlanContent()}
-                    </div>
-                </div>
-            )}
-            
-            {view === 'registry' && selectedProjectId && (
-                <div className="bg-black/20 backdrop-blur-2xl rounded-3xl border border-white/10 shadow-lg overflow-hidden">
-                    <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-white/10">
-                            <thead className="bg-white/10">
-                                <tr>
-                                    <th className="px-6 py-4 text-left text-sm font-bold text-gray-200 uppercase tracking-wider">{t('table_code')}</th>
-                                    <th className="px-6 py-4 text-left text-sm font-bold text-gray-200 uppercase tracking-wider">{t('table_type')}</th>
-                                    <th className="px-6 py-4 text-left text-sm font-bold text-gray-200 uppercase tracking-wider">{t('status')}</th>
-                                    <th className="px-6 py-4 text-left text-sm font-bold text-gray-200 uppercase tracking-wider">{t('assigned_workers')}</th>
-                                    <th className="relative px-6 py-4"><span className="sr-only">Actions</span></th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-white/10">
-                                {tables?.map(table => (
-                                    <RegistryRow key={table.id} table={table} onStatusToggle={handleStatusToggle} onEditRequest={(t) => setModalState({isOpen: true, table: t})} />
-                                ))}
-                            </tbody>
-                        </table>
-                        {(!tables || tables.length === 0) && <p className="text-center py-12 text-gray-300 text-lg">{t('no_tables_defined')}</p>}
-                    </div>
-                </div>
-            )}
-            
-            {modalState.isOpen && selectedProjectId && (
+             <button
+                onClick={() => setDrawingMode(d => !d)}
+                className={`absolute top-4 right-4 z-10 p-3 rounded-full shadow-lg transition-colors ${drawingMode ? 'bg-[var(--color-primary)]' : 'bg-black/50 hover:bg-black/80'}`}
+                title={t('drawing_mode')}
+            >
+                <PencilSwooshIcon className="w-7 h-7" />
+            </button>
+            {(selectedTable || modalCoords) && (
                 <TableManagementModal
-                    projectId={selectedProjectId}
-                    coords={modalState.coords}
-                    table={modalState.table}
-                    onClose={() => setModalState({ isOpen: false })}
+                    table={selectedTable!}
+                    coords={modalCoords!}
+                    projectId={project.id!}
+                    onClose={() => { setSelectedTable(null); setModalCoords(null); }}
                 />
             )}
         </div>
     );
 };
 
-interface RegistryRowProps {
-    table: SolarTable;
-    onStatusToggle: (table: SolarTable) => void;
-    onEditRequest: (table: SolarTable) => void;
-}
 
-const RegistryRow: React.FC<RegistryRowProps> = ({ table, onStatusToggle, onEditRequest }) => {
+// --- Registry View ---
+const RegistryView = ({ tables, assignments, workers }: { tables: SolarTable[], assignments: TableAssignment[], workers: Worker[]}) => {
     const { t } = useI18n();
-    const assignments = useLiveQuery(() => db.tableAssignments.where('tableId').equals(table.id!).toArray(), [table.id]);
-    const workers = useLiveQuery(() => assignments ? db.workers.where('id').anyOf(assignments.map(a => a.workerId)).toArray() : [], [assignments]);
+    const workerMap = useMemo(() => new Map(workers.map(w => [w.id!, w])), [workers]);
     
-    const assignedWorkersDisplay = useMemo(() => {
-        const count = assignments?.length || 0;
-        if (count === 0) {
-            return <span className="text-gray-500">0</span>;
-        }
-        const names = workers?.map(w => w.name).join(', ');
-        return (
-            <div className="flex items-center gap-3">
-                 <span className="inline-flex items-center justify-center w-7 h-7 text-sm font-bold text-white bg-[var(--color-secondary)] rounded-full flex-shrink-0">{count}</span>
-                 <span className="truncate max-w-xs" title={names}>{names}</span>
-            </div>
-        );
-    }, [assignments, workers]);
+    const assignmentsMap = useMemo(() => {
+        const map = new Map<number, Worker[]>();
+        assignments.forEach(a => {
+            const tableWorkers = map.get(a.tableId) || [];
+            const worker = workerMap.get(a.workerId);
+            if (worker) tableWorkers.push(worker);
+            map.set(a.tableId, tableWorkers);
+        });
+        return map;
+    }, [assignments, workerMap]);
 
     return (
-        <tr className="hover:bg-white/10 transition-colors">
-            <td className="px-6 py-5 whitespace-nowrap text-lg font-medium text-white">{table.tableCode}</td>
-            <td className="px-6 py-5 whitespace-nowrap text-lg text-gray-200">{t(table.tableType)}</td>
-            <td className="px-6 py-5 whitespace-nowrap">
-                <span
-                    onClick={() => onStatusToggle(table)}
-                    className={`cursor-pointer px-4 py-1.5 inline-flex text-base leading-5 font-bold rounded-full text-white transition-opacity hover:opacity-90 ${
-                        table.status === 'completed' ? 'bg-green-600' : 'bg-yellow-500'
-                    }`}
+        <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-white/10">
+                <thead className="bg-white/10">
+                    <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">{t('table_code')}</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">{t('table_type')}</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">{t('status')}</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">{t('assigned_workers')}</th>
+                    </tr>
+                </thead>
+                <tbody className="divide-y divide-white/10">
+                    {tables.map(table => (
+                        <tr key={table.id} className="hover:bg-white/5">
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-white">{table.tableCode}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">{t(table.tableType)}</td>
+                             <td className="px-6 py-4 whitespace-nowrap">
+                                <span className={`inline-flex items-center gap-2 px-3 py-1 text-sm font-bold rounded-full ${table.status === 'completed' ? 'bg-green-600/30 text-green-300' : 'bg-yellow-600/30 text-yellow-300'}`}>
+                                    {table.status === 'completed' ? <CheckCircleIcon className="w-5 h-5" /> : <ClockIcon className="w-5 h-5" />}
+                                    <span className="hidden sm:inline">{t(table.status)}</span>
+                                </span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
+                                {assignmentsMap.get(table.id!)?.map(w => w.name).join(', ') || '-'}
+                            </td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+        </div>
+    );
+};
+
+// --- Legend ---
+const PlanLegend = ({ workers, assignments }: { workers: Worker[], assignments: TableAssignment[]}) => {
+    const { t } = useI18n();
+    const assignedWorkerIds = useMemo(() => new Set(assignments.map(a => a.workerId)), [assignments]);
+    const activeWorkers = useMemo(() => workers.filter(w => assignedWorkerIds.has(w.id!)), [workers, assignedWorkerIds]);
+
+    return (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+            <div className="p-4 bg-black/20 rounded-lg border border-white/10">
+                <h4 className="font-bold mb-2 text-white">{t('table_type_legend')}</h4>
+                <div className="flex flex-wrap gap-4 text-sm">
+                    <div className="flex items-center gap-2"><div className="w-5 h-5 rounded-sm border-2 border-yellow-400"></div><span>{t('small_table')}</span></div>
+                    <div className="flex items-center gap-2"><div style={{width: 30, height: 20}} className="rounded-sm border-2 border-yellow-400"></div><span>{t('medium_table')}</span></div>
+                    <div className="flex items-center gap-2"><div style={{width: 40, height: 20}} className="rounded-sm border-2 border-yellow-400"></div><span>{t('large_table')}</span></div>
+                    <div className="flex items-center gap-2"><div className="w-5 h-5 rounded-sm border-2 border-green-600 filter saturate-50"></div><span>{t('completed')}</span></div>
+                </div>
+            </div>
+             <div className="p-4 bg-black/20 rounded-lg border border-white/10">
+                <h4 className="font-bold mb-2 text-white">{t('assigned_workers_legend')}</h4>
+                <div className="flex flex-wrap gap-x-4 gap-y-2 text-sm">
+                    {activeWorkers.map(worker => (
+                        <div key={worker.id} className="flex items-center gap-2">
+                            <div className="w-4 h-4 rounded-full" style={{ backgroundColor: getWorkerColor(worker.id!) }}></div>
+                            <span>{worker.name}</span>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        </div>
+    );
+}
+
+// --- Main Component ---
+const Plan: React.FC = () => {
+    const { t } = useI18n();
+    const [selectedProjectId, setSelectedProjectId] = useState<number | ''>('');
+    const [viewMode, setViewMode] = useState<'plan' | 'registry'>('plan');
+    
+    const projects = useLiveQuery(() => db.projects.toArray());
+    const workers = useLiveQuery(() => db.workers.toArray());
+    const solarTables = useLiveQuery(() => selectedProjectId ? db.solarTables.where('projectId').equals(selectedProjectId).toArray() : [], [selectedProjectId]);
+    const tableAssignments = useLiveQuery(() => selectedProjectId ? db.tableAssignments.toArray() : [], [selectedProjectId]);
+    const annotations = useLiveQuery(() => selectedProjectId ? db.planAnnotations.where({ projectId: selectedProjectId, page: 1 }).first() : undefined, [selectedProjectId]);
+
+    const selectedProject = useMemo(() => {
+        if (!selectedProjectId || !projects) return null;
+        return projects.find(p => p.id === selectedProjectId);
+    }, [selectedProjectId, projects]);
+
+    return (
+        <div>
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+                <h1 className="text-5xl font-bold text-white [text-shadow:0_4px_12px_rgba(0,0,0,0.5)]">{t('plan')}</h1>
+                 <select
+                    value={selectedProjectId}
+                    onChange={(e) => setSelectedProjectId(Number(e.target.value))}
+                    className="w-full md:w-auto max-w-sm p-4 bg-black/20 text-white border border-white/20 rounded-xl focus:ring-blue-400 focus:border-blue-400 text-lg [&>option]:bg-gray-800"
                 >
-                    {t(table.status)}
-                </span>
-            </td>
-            <td className="px-6 py-5 whitespace-nowrap text-lg text-gray-200">{assignedWorkersDisplay}</td>
-            <td className="px-6 py-5 whitespace-nowrap text-right text-lg font-bold">
-                <button onClick={() => onEditRequest(table)} className="text-blue-400 hover:underline">{t('edit_table')}</button>
-            </td>
-        </tr>
+                    <option value="" disabled>{t('select_project')}</option>
+                    {projects?.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+            </div>
+            
+            {selectedProject ? (
+                <div className="p-6 bg-black/20 backdrop-blur-2xl rounded-3xl border border-white/10 shadow-lg">
+                    <div className="flex justify-end mb-4">
+                        <div className="inline-flex rounded-lg bg-black/20 border border-white/10 p-1">
+                            <button onClick={() => setViewMode('plan')} className={`px-4 py-2 text-sm font-bold rounded-md ${viewMode === 'plan' ? 'bg-[var(--color-primary)]' : 'hover:bg-white/10'}`}>{t('plan_view')}</button>
+                            <button onClick={() => setViewMode('registry')} className={`px-4 py-2 text-sm font-bold rounded-md ${viewMode === 'registry' ? 'bg-[var(--color-primary)]' : 'hover:bg-white/10'}`}>{t('table_registry')}</button>
+                        </div>
+                    </div>
+                    
+                    {viewMode === 'plan' && solarTables && workers && tableAssignments && (
+                        <>
+                            <PlanView 
+                                project={selectedProject} 
+                                solarTables={solarTables}
+                                assignments={tableAssignments}
+                                workers={workers}
+                                annotations={annotations}
+                            />
+                            <PlanLegend workers={workers} assignments={tableAssignments} />
+                        </>
+                    )}
+                    
+                    {viewMode === 'registry' && solarTables && workers && tableAssignments && (
+                        solarTables.length > 0 ? (
+                             <RegistryView tables={solarTables} assignments={tableAssignments} workers={workers} />
+                        ) : (
+                            <p className="text-center text-gray-400 py-12">{t('no_tables_defined')}</p>
+                        )
+                    )}
+
+                </div>
+            ) : (
+                <div className="text-center p-12 bg-black/20 rounded-xl">
+                    <p className="text-lg">{t('select_project_to_view_plan')}</p>
+                </div>
+            )}
+        </div>
     );
 };
 

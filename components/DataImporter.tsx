@@ -1,10 +1,8 @@
-
-
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { useI18n } from '../contexts/I18nContext';
 import { GoogleGenAI } from '@google/genai';
 import { db } from '../services/db';
-import * as XLSX from 'xlsx';
+import { read, utils } from 'xlsx';
 import Papa from 'papaparse';
 import type { Worker, Project } from '../types';
 import type { Table } from 'dexie';
@@ -86,10 +84,10 @@ const DataImporter: React.FC = () => {
                 const reader = new FileReader();
                 reader.onload = (e) => {
                     const data = new Uint8Array(e.target?.result as ArrayBuffer);
-                    const workbook = XLSX.read(data, { type: 'array' });
+                    const workbook = read(data, { type: 'array' });
                     const sheetName = workbook.SheetNames[0];
                     const worksheet = workbook.Sheets[sheetName];
-                    const json = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+                    const json = utils.sheet_to_json(worksheet, { header: 1 });
                     const [headerRow, ...dataRows] = json as any[][];
                     setHeaders(headerRow);
                     setRawData(dataRows.map(row => headerRow.reduce((obj, h, i) => ({...obj, [h]: row[i]}), {})));
@@ -121,6 +119,9 @@ const DataImporter: React.FC = () => {
                 const response = await ai.models.generateContent({
                     model: 'gemini-2.5-pro',
                     contents: { parts: [filePart, { text: prompt }] },
+                    config: {
+                        thinkingConfig: { thinkingBudget: 32768 },
+                    }
                 });
 
                 const resultJson = JSON.parse(response.text.replace(/```json|```/g, ''));

@@ -1,7 +1,6 @@
-
 import React from 'react';
 
-const ImageIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
+const ColorSwatchIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
     <svg 
         xmlns="http://www.w3.org/2000/svg" 
         width="24" 
@@ -14,10 +13,10 @@ const ImageIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
         strokeLinejoin="round" 
         {...props}
     >
-        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-        <circle cx="8.5" cy="8.5" r="1.5"></circle>
-        <polyline points="21 15 16 10 5 21"></polyline>
+        <path d="M12 22s-2-4-2-8 2-8 2-8" />
+        <path d="M20 22s-2-4-2-8 2-8 2-8" />
+        <path d="M2 12h20" />
     </svg>
 );
 
-export default ImageIcon;
+export default ColorSwatchIcon;

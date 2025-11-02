@@ -1,5 +1,5 @@
 import Dexie, { type Table } from 'dexie';
-import type { Worker, Project, TimeRecord, PlanMarker, SolarTable, TableAssignment, AttendanceSession, DailyLog, ProjectTask, ProjectComponent } from '../types';
+import type { Worker, Project, TimeRecord, PlanMarker, SolarTable, TableAssignment, AttendanceSession, DailyLog, ProjectTask, ProjectComponent, PlanAnnotation } from '../types';
 
 export class MSTDatabase extends Dexie {
   workers!: Table<Worker>;
@@ -12,6 +12,7 @@ export class MSTDatabase extends Dexie {
   dailyLogs!: Table<DailyLog>;
   projectTasks!: Table<ProjectTask>;
   projectComponents!: Table<ProjectComponent>;
+  planAnnotations!: Table<PlanAnnotation>;
 
   constructor() {
     super('MSTDatabase');
@@ -91,6 +92,11 @@ export class MSTDatabase extends Dexie {
     // Version 11: Adds projectComponents table for legend analysis results.
     dbInstance.version(11).stores({
       projectComponents: '++id, projectId',
+    });
+
+    // Version 12: Add table for plan drawing annotations.
+    dbInstance.version(12).stores({
+      planAnnotations: '++id, &[projectId+page]',
     });
   }
 }

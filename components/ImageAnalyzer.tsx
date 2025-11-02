@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback } from 'react';
 import { GoogleGenAI } from '@google/genai';
 import { useI18n } from '../contexts/I18nContext';
@@ -21,6 +22,7 @@ const ImageAnalyzer: React.FC = () => {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [result, setResult] = useState<string | null>(null);
+    const [isThinkingMode, setIsThinkingMode] = useState(false);
 
     const handleImageChange = (file: File | null) => {
         if (file && file.type.startsWith('image/')) {
@@ -68,8 +70,13 @@ const ImageAnalyzer: React.FC = () => {
             const textPart = { text: prompt };
 
             const response = await ai.models.generateContent({
-                model: 'gemini-2.5-flash',
+                model: isThinkingMode ? 'gemini-2.5-pro' : 'gemini-2.5-flash',
                 contents: { parts: [imagePart, textPart] },
+                ...(isThinkingMode && {
+                    config: {
+                        thinkingConfig: { thinkingBudget: 32768 }
+                    }
+                })
             });
             
             setResult(response.text);
@@ -132,6 +139,24 @@ const ImageAnalyzer: React.FC = () => {
                         rows={3}
                         className="w-full p-4 bg-black/20 text-white placeholder-gray-400 border border-white/20 rounded-xl focus:ring-blue-400 focus:border-blue-400 text-lg"
                     />
+
+                    <label htmlFor="thinking-mode-analyzer" className="flex items-center cursor-pointer p-2 rounded-lg hover:bg-white/5 transition">
+                        <div className="relative">
+                            <input
+                                type="checkbox"
+                                id="thinking-mode-analyzer"
+                                className="peer sr-only"
+                                checked={isThinkingMode}
+                                onChange={() => setIsThinkingMode(!isThinkingMode)}
+                            />
+                            <div className="block bg-gray-600 w-14 h-8 rounded-full peer-checked:bg-[var(--color-primary)] transition"></div>
+                            <div className="dot absolute left-1 top-1 bg-white w-6 h-6 rounded-full transition-transform peer-checked:translate-x-full"></div>
+                        </div>
+                        <div className="ml-3 text-white">
+                            <div className="font-bold">{t('thinking_mode')}</div>
+                            <div className="text-sm text-gray-400">{t('thinking_mode_desc')}</div>
+                        </div>
+                    </label>
 
                     <button
                         onClick={handleAnalyze}
