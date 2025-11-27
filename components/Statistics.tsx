@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, } from 'recharts';
+import type { PieLabelRenderProps } from 'recharts';
 import { db } from '../services/db';
 import { useI18n } from '../contexts/I18nContext';
 import type { Project, TimeRecord, Worker, SolarTable, ProjectTask } from '../types';
@@ -149,6 +150,20 @@ const AIPredictions = ({ projects, workers, records, tables }: { projects: Proje
     );
 };
 
+const renderCompletionLabel = ({ name, percent }: PieLabelRenderProps) => {
+    if (!name) {
+        return '';
+    }
+
+    const numericPercent = typeof percent === 'number'
+        ? percent
+        : typeof percent === 'string'
+            ? Number.parseFloat(percent) || 0
+            : 0;
+
+    return `${name} ${(numericPercent * 100).toFixed(0)}%`;
+};
+
 const Statistics: React.FC = () => {
     const { t } = useI18n();
     const projects = useLiveQuery(() => db.projects.toArray(), []);
@@ -262,8 +277,18 @@ const Statistics: React.FC = () => {
                                         <stop offset="95%" stopColor="var(--color-chart-2)" stopOpacity={0.6}/>
                                     </linearGradient>
                                 </defs>
-                                {/* Fix: The `percent` prop from recharts can be undefined. A fallback to 0 is added to prevent a TypeError during multiplication. */}
-                                <Pie data={stats.completionRateData} cx="50%" cy="50%" labelLine={false} outerRadius={120} fill="#8884d8" dataKey="value" nameKey="name" label={({ name, percent }) => `${name} ${((percent || 0) * 100).toFixed(0)}%`}>
+                                {/* Fix: Delegate label formatting to a helper that safely handles optional percent values. */}
+                                <Pie
+                                    data={stats.completionRateData}
+                                    cx="50%"
+                                    cy="50%"
+                                    labelLine={false}
+                                    outerRadius={120}
+                                    fill="#8884d8"
+                                    dataKey="value"
+                                    nameKey="name"
+                                    label={renderCompletionLabel}
+                                >
                                     {stats.completionRateData.map((entry, index) => (
                                         <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} stroke="rgba(255,255,255,0.1)" />
                                     ))}
