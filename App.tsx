@@ -19,9 +19,6 @@ const Plan = React.lazy(() => import('./components/Plan'));
 const Reports = React.lazy(() => import('./components/Reports'));
 const Attendance = React.lazy(() => import('./components/Attendance'));
 const DataImporter = React.lazy(() => import('./components/DataImporter'));
-const ProjectFinder = React.lazy(() => import('./components/ProjectFinder'));
-const ImageAnalyzer = React.lazy(() => import('./components/ImageAnalyzer'));
-const ImageGenerator = React.lazy(() => import('./components/ImageGenerator'));
 
 // Loading Fallback Component
 const PageLoader = () => (
@@ -35,26 +32,11 @@ const PageLoader = () => (
 );
 
 const App: React.FC = () => {
-  const { isAuthenticated, login } = useAuth();
-  const [showAdminLogin, setShowAdminLogin] = useState(false);
-
-  const handleUnlock = (role: 'user' | 'admin') => {
-    if (role === 'user') {
-      login({ username: 'user', role: 'user' });
-    } else if (role === 'admin') {
-      setShowAdminLogin(true);
-    }
-  };
+  const { isAuthenticated } = useAuth();
   
-  const handleBackFromLogin = () => {
-    setShowAdminLogin(false);
-  };
-
   if (!isAuthenticated) {
-    if (showAdminLogin) {
-      return <Login onBack={handleBackFromLogin} />;
-    }
-    return <SplashScreen onUnlock={handleUnlock} />;
+    // Replaced SplashScreen with direct Login or Splash that redirects to login
+    return <Login />;
   }
 
   return (
@@ -74,9 +56,6 @@ const App: React.FC = () => {
                   <Route path="/attendance" element={<Attendance />} />
                   <Route path="/settings" element={<Settings />} />
                   <Route path="/import" element={<DataImporter />} />
-                  <Route path="/finder" element={<ProjectFinder />} />
-                  <Route path="/analyzer" element={<ImageAnalyzer />} />
-                  <Route path="/generator" element={<ImageGenerator />} />
                   <Route path="*" element={<Navigate to="/" />} />
               </Routes>
               </Suspense>

@@ -11,23 +11,26 @@ import WorkersIcon from './icons/WorkersIcon';
 import ProjectsIcon from './icons/ProjectsIcon';
 import SettingsIcon from './icons/SettingsIcon';
 import ClockIcon from './icons/ClockIcon';
-import AICommandBar from './AICommandBar';
 import ConnectionStatusIndicator from './ConnectionStatusIndicator';
 
 const BottomNavBar: React.FC = () => {
     const { t } = useI18n();
+    const { user } = useAuth();
+    
     const navItems = [
-        { to: "/", title: t('dashboard'), icon: <DashboardIcon className="w-6 h-6 mb-1" /> },
-        { to: "/workers", title: t('workers'), icon: <WorkersIcon className="w-6 h-6 mb-1" /> },
-        { to: "/projects", title: t('projects'), icon: <ProjectsIcon className="w-6 h-6 mb-1" /> },
-        { to: "/records", title: t('work_log'), icon: <ClockIcon className="w-6 h-6 mb-1" /> },
-        { to: "/settings", title: t('settings'), icon: <SettingsIcon className="w-6 h-6 mb-1" /> },
+        { to: "/", title: t('dashboard'), icon: <DashboardIcon className="w-6 h-6 mb-1" />, roles: ['admin', 'user'] },
+        { to: "/workers", title: t('workers'), icon: <WorkersIcon className="w-6 h-6 mb-1" />, roles: ['admin'] },
+        { to: "/projects", title: t('projects'), icon: <ProjectsIcon className="w-6 h-6 mb-1" />, roles: ['admin', 'user'] },
+        { to: "/records", title: t('work_log'), icon: <ClockIcon className="w-6 h-6 mb-1" />, roles: ['admin', 'user'] },
+        { to: "/settings", title: t('settings'), icon: <SettingsIcon className="w-6 h-6 mb-1" />, roles: ['admin'] },
     ];
+
+    const visibleItems = navItems.filter(item => item.roles.includes(user?.role || 'user'));
 
     return (
         <nav className="md:hidden bottom-nav glass-card border-t border-white/20 rounded-t-[2.5rem] shadow-[0_-20px_50px_rgba(0,0,0,0.8)]">
             <div className="flex justify-around items-center h-24 px-2">
-                {navItems.map(item => (
+                {visibleItems.map(item => (
                     <NavLink
                         key={item.to}
                         to={item.to}
@@ -58,16 +61,18 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const location = useLocation();
 
   return (
-    <div className="flex flex-col h-screen bg-transparent overflow-hidden">
-      {/* Header - Darker and crisper */}
-      <header className={`flex justify-between items-center h-24 px-6 md:px-10 bg-slate-950/80 backdrop-blur-3xl border-b border-white/15 header-safe-area shrink-0 z-50 ${user?.role === 'admin' ? 'border-b-4 border-b-[var(--color-primary)] shadow-[0_10px_30px_rgba(99,102,241,0.2)]' : ''}`}>
-         <div className="flex items-center gap-8">
-             <Link to="/" className="text-4xl md:text-5xl font-black italic tracking-tighter text-white hover:scale-105 transition-transform active:scale-95 drop-shadow-2xl">
+    <div className="fixed inset-0 w-full h-[100dvh] flex flex-col bg-transparent overflow-hidden">
+      {/* Header - Fixed height, no shrink, no overflow */}
+      <header className={`flex justify-between items-center h-24 px-6 md:px-10 bg-slate-950/80 backdrop-blur-3xl border-b border-white/15 header-safe-area shrink-0 z-50 w-full ${user?.role === 'admin' ? 'border-b-4 border-b-[var(--color-primary)] shadow-[0_10px_30px_rgba(99,102,241,0.2)]' : ''}`}>
+         <div className="flex items-center gap-8 min-w-0">
+             <Link to="/" className="text-4xl md:text-5xl font-black italic tracking-tighter text-white hover:scale-105 transition-transform active:scale-95 drop-shadow-2xl truncate">
                 MST<span className="text-[var(--color-accent)]">.</span>
               </Link>
-              <ConnectionStatusIndicator />
+              <div className="hidden sm:block">
+                <ConnectionStatusIndicator />
+              </div>
          </div>
-        <div className="flex items-center space-x-3 md:space-x-8">
+        <div className="flex items-center space-x-3 md:space-x-8 shrink-0">
           <button onClick={toggleTheme} className="text-slate-200 hover:text-white transition-all p-3 rounded-2xl hover:bg-white/10 active:scale-90 shadow-inner">
             {colorTheme === 'light' ? <SunIcon className="w-7 h-7" /> : <MoonIcon className="w-7 h-7" />}
           </button>
@@ -94,14 +99,16 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         </div>
       </header>
       
-      {/* Main content */}
-      <main className="flex-1 overflow-x-hidden overflow-y-auto main-safe-area relative custom-scrollbar px-6 md:px-12 py-10">
-          <div key={location.pathname} className="max-w-7xl mx-auto animate-page-enter">
+      {/* Main content - Scrollable area - explicitly allow touch scrolling here */}
+      <main 
+        className="flex-1 overflow-y-auto overflow-x-hidden main-safe-area relative custom-scrollbar px-4 md:px-12 py-6 md:py-10 overscroll-contain w-full"
+        style={{ touchAction: 'pan-y' }}
+      >
+          <div key={location.pathname} className="max-w-7xl mx-auto animate-page-enter pb-24 md:pb-0 w-full">
               {children}
           </div>
       </main>
       
-      <AICommandBar />
       <BottomNavBar />
     </div>
   );

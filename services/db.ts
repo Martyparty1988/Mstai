@@ -114,16 +114,23 @@ export class MSTDatabase extends Dexie {
         });
     });
 
-    // Version 16: Fix missing indexes for queries used in the app
     dbInstance.version(16).stores({
         solarTables: '++id, projectId, tableCode, status, [projectId+tableCode], [projectId+status]',
         tableStatusHistory: '++id, tableId, workerId, status, timestamp',
         projectTasks: '++id, projectId, assignedWorkerId, completionDate',
     });
 
-    // Version 17: Add backups table
     dbInstance.version(17).stores({
         backups: '++id, type, timestamp',
+    });
+
+    dbInstance.version(18).stores({
+        workers: '++id, name, username',
+    });
+
+    // Version 19: Add googleSpreadsheetId to projects
+    dbInstance.version(19).stores({
+        projects: '++id, name, status, googleSpreadsheetId',
     });
   }
 }

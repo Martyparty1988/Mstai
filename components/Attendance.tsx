@@ -3,6 +3,7 @@ import React, { useState, useMemo, useCallback } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../services/db';
 import { useI18n } from '../contexts/I18nContext';
+import { useAuth } from '../contexts/AuthContext';
 import type { Worker, DailyLog, AttendanceStatus } from '../types';
 import CalendarIcon from './icons/CalendarIcon';
 
@@ -13,9 +14,20 @@ const toDateString = (date: Date): string => {
 
 const Attendance: React.FC = () => {
     const { t } = useI18n();
+    const { user } = useAuth();
     const [selectedDate, setSelectedDate] = useState(toDateString(new Date()));
 
-    const workers = useLiveQuery(() => db.workers.toArray());
+    const workers = useLiveQuery(async () => {
+        if (user?.role === 'admin') {
+            return db.workers.toArray();
+        } else if (user?.workerId) {
+            // If normal user, only fetch themselves
+            const w = await db.workers.get(user.workerId);
+            return w ? [w] : [];
+        }
+        return [];
+    }, [user]);
+
     const dailyLogs = useLiveQuery(() => db.dailyLogs.where('date').equals(selectedDate).toArray(), [selectedDate]);
 
     const logsMap = useMemo(() => new Map<number, DailyLog>(dailyLogs?.map(log => [log.workerId, log]) || []), [dailyLogs]);

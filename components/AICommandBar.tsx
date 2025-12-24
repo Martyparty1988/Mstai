@@ -41,6 +41,7 @@ const AICommandBar: React.FC = () => {
     const [showTemplates, setShowTemplates] = useState(false);
     const [attachedFile, setAttachedFile] = useState<{ file: File, preview: string } | null>(null);
     const [tokenUsage, setTokenUsage] = useState<number | null>(null);
+    const [voiceOutputEnabled, setVoiceOutputEnabled] = useState(true);
     
     const fileInputRef = useRef<HTMLInputElement>(null);
     const templatesRef = useRef<HTMLDivElement>(null);
@@ -63,6 +64,24 @@ const AICommandBar: React.FC = () => {
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
+
+    const speak = (text: string) => {
+        if (!voiceOutputEnabled || !('speechSynthesis' in window)) return;
+        
+        // Cancel any current speaking
+        window.speechSynthesis.cancel();
+
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = language === 'cs' ? 'cs-CZ' : 'en-US';
+        utterance.rate = 1.1; // Slightly faster for efficiency
+        
+        // Try to select a good voice
+        const voices = window.speechSynthesis.getVoices();
+        const preferredVoice = voices.find(v => v.lang.startsWith(language === 'cs' ? 'cs' : 'en') && !v.name.includes('Google'));
+        if (preferredVoice) utterance.voice = preferredVoice;
+
+        window.speechSynthesis.speak(utterance);
+    };
 
     const findWorker = (name: string): Worker => {
         if (!workers) throw new Error("Workers not loaded");
@@ -323,22 +342,27 @@ const AICommandBar: React.FC = () => {
             const functionCalls = response.functionCalls;
             if (functionCalls && functionCalls.length > 0) {
                 let executedCount = 0;
+                let lastResult = "";
                 for(const call of functionCalls) {
                     const { name, args } = call;
                     if (handlers[name]) {
                         if (name === 'createTimeRecord' && !args.date) args.date = today;
                         const result = await handlers[name](args);
-                        showToast(result || t('command_executed_successfully'), "success");
+                        lastResult = result || t('command_executed_successfully');
+                        showToast(lastResult, "success");
                         executedCount++;
                     }
                 }
                 setPrompt('');
-                if (executedCount > 0) removeFile();
+                if (executedCount > 0) {
+                    removeFile();
+                    speak(lastResult);
+                }
             } else {
                 // If no function called, it's a chat response or analysis
                 if (response.text) {
                     showToast("Odpověď: " + response.text.substring(0, 100) + (response.text.length > 100 ? '...' : ''), "info", 5000);
-                    // Could expand to show full response in a modal if needed
+                    speak(response.text);
                 } else {
                     showToast(t('error_executing_command'), "warning");
                 }
@@ -456,6 +480,15 @@ const AICommandBar: React.FC = () => {
                             <UploadIcon className="w-6 h-6" />
                         </button>
                         <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" accept="image/*,.txt,.csv,.pdf" />
+
+                        <button
+                            type="button"
+                            onClick={() => setVoiceOutputEnabled(!voiceOutputEnabled)}
+                            className={`p-2 transition-colors ${voiceOutputEnabled ? 'text-green-400' : 'text-gray-600 hover:text-gray-400'}`}
+                            title={t('voice_output')}
+                        >
+                            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" /></svg>
+                        </button>
 
                         {/* Input */}
                         <input

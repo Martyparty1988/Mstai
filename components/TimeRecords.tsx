@@ -1,6 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { useI18n } from '../contexts/I18nContext';
+import { useAuth } from '../contexts/AuthContext';
 import TimeRecordForm from './TimeRecordForm';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../services/db';
@@ -20,17 +21,35 @@ type ActivityItem = {
 
 const TimeRecords: React.FC = () => {
   const { t } = useI18n();
+  const { user } = useAuth();
   const [showForm, setShowForm] = useState(false);
 
-  // Fetch all data types for the activity feed
-  const records = useLiveQuery(() => db.records.toArray(), [], []);
-  const tasks = useLiveQuery(() => db.projectTasks.where('completionDate').above(new Date(0)).toArray(), [], []);
-  const tableHistory = useLiveQuery(() => db.tableStatusHistory.where('status').equals('completed').toArray(), [], []);
+  // Fetch all data types for the activity feed, filtering if not admin
+  const records = useLiveQuery(async () => {
+      if(user?.role === 'admin') return db.records.toArray();
+      if(user?.workerId) return db.records.where('workerId').equals(user.workerId).toArray();
+      return [];
+  }, [user]);
+
+  const tasks = useLiveQuery(async () => {
+      if(user?.role === 'admin') return db.projectTasks.where('completionDate').above(new Date(0)).toArray();
+      if(user?.workerId) return db.projectTasks.where('assignedWorkerId').equals(user.workerId).filter(t => !!t.completionDate).toArray();
+      return [];
+  }, [user]);
+
+  const tableHistory = useLiveQuery(async () => {
+      if(user?.role === 'admin') return db.tableStatusHistory.where('status').equals('completed').toArray();
+      if(user?.workerId) return db.tableStatusHistory.where('workerId').equals(user.workerId).filter(h => h.status === 'completed').toArray();
+      return [];
+  }, [user]);
+
   const workers = useLiveQuery(() => db.workers.toArray(), [], []);
   const projects = useLiveQuery(() => db.projects.toArray(), [], []);
   const tables = useLiveQuery(() => db.solarTables.toArray(), [], []);
 
   const activityFeed = useMemo(() => {
+    if (!records || !tasks || !tableHistory) return [];
+
     const workerMap = new Map<number, string>(
         workers.filter(w => w.id != null).map(w => [w.id!, w.name] as [number, string])
     );

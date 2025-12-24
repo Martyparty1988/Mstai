@@ -1,15 +1,11 @@
 
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useI18n } from '../contexts/I18nContext';
 import { db } from '../services/db';
 import * as XLSX from 'xlsx';
 import Papa from 'papaparse';
-import { GoogleGenAI, Type } from '@google/genai';
 import type { Worker, Project } from '../types';
-import type { Table } from 'dexie';
 import CheckCircleIcon from './icons/CheckCircleIcon';
-import BrainIcon from './icons/BrainIcon';
-import ImageIcon from './icons/ImageIcon';
 import UploadIcon from './icons/UploadIcon';
 
 interface SchemaConfig {
@@ -31,14 +27,13 @@ const DESTINATION_SCHEMAS: Record<'workers' | 'projects', Record<string, SchemaC
 };
 
 type DestinationType = keyof typeof DESTINATION_SCHEMAS;
-type ImportMethod = 'file' | 'text' | 'image';
+type ImportMethod = 'file';
 
 const DataImporter: React.FC = () => {
     const { t } = useI18n();
     const [method, setMethod] = useState<ImportMethod>('file');
     const [step, setStep] = useState(1);
     const [file, setFile] = useState<File | null>(null);
-    const [pasteText, setPasteText] = useState('');
     const [rawData, setRawData] = useState<any[]>([]);
     const [headers, setHeaders] = useState<string[]>([]);
     const [destination, setDestination] = useState<DestinationType>('workers');
@@ -54,7 +49,6 @@ const DataImporter: React.FC = () => {
     const resetState = () => {
         setStep(1);
         setFile(null);
-        setPasteText('');
         setRawData([]);
         setHeaders([]);
         setMappings({});
@@ -66,11 +60,6 @@ const DataImporter: React.FC = () => {
     const handleFile = async (selectedFile: File) => {
         setFile(selectedFile);
         
-        if (method === 'image') {
-            handleImageOcr(selectedFile);
-            return;
-        }
-
         setIsLoading(true);
         const extension = selectedFile.name.split('.').pop()?.toLowerCase();
 
@@ -121,117 +110,6 @@ const DataImporter: React.FC = () => {
         }
     };
 
-    const handleSmartPaste = async () => {
-        if (!pasteText.trim() || !process.env.API_KEY) return;
-        setIsLoading(true);
-        setLoadingMessage(t('extracting_data'));
-
-        try {
-            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-            // Fix: Cast schema to properly typed record to avoid property access errors on generic string keys
-            const schema = DESTINATION_SCHEMAS[destination] as Record<string, SchemaConfig>;
-            const schemaString = JSON.stringify(schema);
-
-            const response = await ai.models.generateContent({
-                model: 'gemini-3-flash-preview',
-                contents: `Extract ${destination} from this text. REQUIRED SCHEMA: ${schemaString}. TEXT: "${pasteText}"`,
-                config: {
-                    responseMimeType: 'application/json',
-                    responseSchema: {
-                        type: Type.ARRAY,
-                        items: {
-                            type: Type.OBJECT,
-                            properties: Object.keys(schema).reduce((acc, key) => ({
-                                ...acc,
-                                [key]: { type: schema[key].type === 'number' ? Type.NUMBER : Type.STRING }
-                            }), {}),
-                            required: Object.keys(schema).filter(k => schema[k].required)
-                        }
-                    }
-                }
-            });
-
-            const extractedData = JSON.parse(response.text);
-            setRawData(extractedData);
-            setHeaders(Object.keys(schema));
-            // Auto mapping for AI extracted data
-            const autoMap: any = {};
-            Object.keys(schema).forEach(k => autoMap[k] = k);
-            setMappings(autoMap);
-            setStep(3);
-        } catch (error) {
-            console.error(error);
-            alert(t('ai_import_error'));
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
-    const handleImageOcr = async (imageFile: File) => {
-        if (!process.env.API_KEY) return;
-        setIsLoading(true);
-        setLoadingMessage(t('ocr_processing'));
-
-        try {
-            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-            const reader = new FileReader();
-            const base64Data = await new Promise<string>((resolve) => {
-                reader.onload = () => resolve((reader.result as string).split(',')[1]);
-                reader.readAsDataURL(imageFile);
-            });
-
-            const schema = DESTINATION_SCHEMAS[destination];
-            const response = await ai.models.generateContent({
-                model: 'gemini-2.5-flash-image',
-                contents: {
-                    parts: [
-                        { inlineData: { data: base64Data, mimeType: imageFile.type } },
-                        { text: `Parse this image and extract a list of ${destination}. Output JSON matching this schema: ${JSON.stringify(schema)}` }
-                    ]
-                },
-                config: { responseMimeType: 'application/json' }
-            });
-
-            const extractedData = JSON.parse(response.text);
-            setRawData(Array.isArray(extractedData) ? extractedData : [extractedData]);
-            setHeaders(Object.keys(schema));
-            const autoMap: any = {};
-            Object.keys(schema).forEach(k => autoMap[k] = k);
-            setMappings(autoMap);
-            setStep(3);
-        } catch (error) {
-            console.error(error);
-            alert(t('ai_import_error'));
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
-    const handleMagicMap = async () => {
-        if (headers.length === 0 || !process.env.API_KEY) return;
-        setIsLoading(true);
-        setLoadingMessage('AI mapping...');
-
-        try {
-            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-            const destFields = Object.keys(DESTINATION_SCHEMAS[destination]);
-            
-            const response = await ai.models.generateContent({
-                model: 'gemini-3-flash-preview',
-                contents: `Match these source headers [${headers.join(', ')}] to these destination fields [${destFields.join(', ')}]. Output only a JSON object where key is source header and value is destination field. If no match, value should be null.`,
-                config: { responseMimeType: 'application/json' }
-            });
-
-            const aiMappings = JSON.parse(response.text);
-            setMappings(aiMappings);
-        } catch (error) {
-            console.error(error);
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
-    // Fix: Explicitly type Object.entries to SchemaConfig to fix "Property 'required' does not exist on type 'unknown'"
     const requiredFields = (Object.entries(DESTINATION_SCHEMAS[destination]) as [string, SchemaConfig][])
         .filter(([_, config]) => config.required)
         .map(([key]) => key);
@@ -275,6 +153,10 @@ const DataImporter: React.FC = () => {
 
             if(destination === 'workers') {
                 newRecord.createdAt = new Date();
+                // Basic login generation for imported workers
+                if(newRecord.name) {
+                    newRecord.username = String(newRecord.name).toLowerCase().replace(/\s/g, '');
+                }
             }
 
             if (!uniqueIdentifier) {
@@ -314,18 +196,13 @@ const DataImporter: React.FC = () => {
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
                 <h1 className="text-5xl font-bold text-white [text-shadow:0_4px_12px_rgba(0,0,0,0.5)]">{t('import_data_title')}</h1>
                 <div className="flex bg-black/20 p-1 rounded-2xl border border-white/10 backdrop-blur-xl shrink-0">
-                    {(['file', 'text', 'image'] as const).map(m => (
-                        <button 
-                            key={m}
-                            onClick={() => { setMethod(m); resetState(); }}
-                            className={`px-4 py-2 rounded-xl text-sm font-black uppercase transition-all flex items-center gap-2 ${method === m ? 'bg-[var(--color-primary)] text-white shadow-lg' : 'text-gray-400 hover:text-white'}`}
-                        >
-                            {m === 'file' && <UploadIcon className="w-4 h-4" />}
-                            {m === 'text' && <BrainIcon className="w-4 h-4" />}
-                            {m === 'image' && <ImageIcon className="w-4 h-4" />}
-                            {t(m === 'file' ? 'file_upload' : m === 'text' ? 'smart_paste' : 'image_ocr')}
-                        </button>
-                    ))}
+                    <button 
+                        onClick={() => { setMethod('file'); resetState(); }}
+                        className={`px-4 py-2 rounded-xl text-sm font-black uppercase transition-all flex items-center gap-2 ${method === 'file' ? 'bg-[var(--color-primary)] text-white shadow-lg' : 'text-gray-400 hover:text-white'}`}
+                    >
+                        <UploadIcon className="w-4 h-4" />
+                        {t('file_upload')}
+                    </button>
                 </div>
             </div>
 
@@ -356,38 +233,6 @@ const DataImporter: React.FC = () => {
                                 <input id="file-upload-importer" type="file" className="sr-only" onChange={(e) => e.target.files && handleFile(e.target.files[0])} />
                             </div>
                         )}
-
-                        {method === 'text' && (
-                            <div className="space-y-4">
-                                <textarea
-                                    value={pasteText}
-                                    onChange={e => setPasteText(e.target.value)}
-                                    className="w-full h-80 p-6 bg-black/40 text-white border border-white/10 rounded-[2rem] focus:ring-2 focus:ring-[var(--color-accent)] outline-none text-lg font-medium resize-none custom-scrollbar"
-                                    placeholder={t('smart_paste_placeholder')}
-                                />
-                                <button 
-                                    onClick={handleSmartPaste}
-                                    disabled={!pasteText.trim()}
-                                    className="w-full py-5 bg-indigo-600 text-white font-black rounded-2xl hover:bg-indigo-500 transition-all shadow-xl uppercase tracking-widest disabled:opacity-30 flex items-center justify-center gap-3"
-                                >
-                                    <BrainIcon className="w-6 h-6" />
-                                    {t('smart_paste')}
-                                </button>
-                            </div>
-                        )}
-
-                        {method === 'image' && (
-                            <div 
-                                onDrop={handleDrop} onDragOver={e => { e.preventDefault(); setIsDragOver(true); }} onDragLeave={() => setIsDragOver(false)}
-                                className={`flex flex-col justify-center items-center h-80 border-4 border-dashed rounded-[2rem] cursor-pointer transition-all duration-300 ${isDragOver ? 'border-cyan-400 bg-cyan-400/10 scale-102' : 'border-white/10 hover:border-white/30 hover:bg-white/5'}`}
-                                onClick={() => document.getElementById('image-ocr-upload')?.click()}
-                            >
-                                <div className="p-6 bg-white/5 rounded-full mb-4"><ImageIcon className="w-16 h-16 text-gray-400" /></div>
-                                <p className="text-2xl font-black text-white uppercase tracking-tighter">Nahrát fotku tabulky</p>
-                                <p className="text-gray-500 mt-2">AI přečte data z obrázku (PNG, JPG)</p>
-                                <input id="image-ocr-upload" type="file" accept="image/*" className="sr-only" onChange={(e) => e.target.files && handleFile(e.target.files[0])} />
-                            </div>
-                        )}
                     </div>
                 )}
                 
@@ -395,13 +240,6 @@ const DataImporter: React.FC = () => {
                     <div className="animate-fade-in">
                         <div className="flex justify-between items-center mb-8">
                             <h2 className="text-3xl font-black text-white uppercase tracking-tighter">{t('step_2_map_title')}</h2>
-                            <button 
-                                onClick={handleMagicMap}
-                                className="px-6 py-3 bg-indigo-600/20 text-indigo-400 border border-indigo-500/50 rounded-xl font-black uppercase tracking-tighter flex items-center gap-2 hover:bg-indigo-600 hover:text-white transition-all"
-                            >
-                                <BrainIcon className="w-5 h-5" />
-                                {t('magic_map')}
-                            </button>
                         </div>
 
                         <div className={`mb-8 p-6 rounded-3xl border ${missingFields.length === 0 ? 'bg-green-900/20 border-green-500/30' : 'bg-amber-900/20 border-amber-500/30'}`}>

@@ -3,6 +3,8 @@ export interface Worker {
   id?: number;
   name: string;
   hourlyRate: number;
+  username?: string; // New: Login username
+  password?: string; // New: Simple password/pin
   createdAt: Date;
 }
 
@@ -11,10 +13,9 @@ export interface Project {
   name: string;
   description?: string;
   status: 'active' | 'completed' | 'on_hold';
-  // Fix: Changed type from Blob to File to correctly type the plan document,
-  // which includes properties like `name`.
   planFile?: File;
-  aiPlanFile?: File;
+  googleSpreadsheetId?: string; // ID of the connected Google Sheet
+  lastSync?: Date; // Timestamp of last sync
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -31,6 +32,7 @@ export interface TimeRecord {
 export interface User {
   username: string;
   role: 'user' | 'admin';
+  workerId?: number; // New: Links the logged-in user to a specific worker record
 }
 
 export interface SolarTable {
@@ -157,5 +159,12 @@ export interface PromptTemplate {
   id: string;
   title: string;
   text: string;
-  icon?: string;
+  icon: string;
+}
+
+export interface CloudBackupFile {
+  id: string;
+  name: string;
+  createdTime: string;
+  size: string;
 }

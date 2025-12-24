@@ -1,6 +1,6 @@
 
-const CACHE_NAME = 'mst-app-v3';
-const DYNAMIC_CACHE_NAME = 'mst-dynamic-v3';
+const CACHE_NAME = 'mst-app-v4';
+const DYNAMIC_CACHE_NAME = 'mst-dynamic-v4';
 
 const ASSETS_TO_CACHE = [
   '/',
