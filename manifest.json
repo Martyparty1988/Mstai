@@ -2,20 +2,26 @@
 {
   "short_name": "MST",
   "name": "Martyho Solar Tracker",
+  "description": "Profesionální nástroj pro správu solárních montáží, docházky a projektů.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#020024",
+  "background_color": "#020024",
+  "categories": ["productivity", "business", "utilities"],
   "icons": [
     {
-      "src": "https://image.pollinations.ai/prompt/a%20modern%20flat%20design%20app%20icon%20of%20a%20phoenix%20rising%20from%20a%20burning%20spreadsheet,%20vibrant%20orange%20and%20purple,%20minimalist,%20funny,%20cartoon%20style?width=192&height=192",
+      "src": "https://image.pollinations.ai/prompt/modern%203d%20glassmorphism%20app%20icon%20solar%20panel%20technology%20sun%20energy%20neon%20blue%20purple%20gradient%20dark%20background%20minimalist%20vector?width=192&height=192&nologo=true",
       "type": "image/png",
-      "sizes": "192x192"
+      "sizes": "192x192",
+      "purpose": "any maskable"
     },
     {
-      "src": "https://image.pollinations.ai/prompt/a%20modern%20flat%20design%20app%20icon%20of%20a%20phoenix%20rising%20from%20a%20burning%20spreadsheet,%20vibrant%20orange%20and%20purple,%20minimalist,%20funny,%20cartoon%20style?width=512&height=512",
+      "src": "https://image.pollinations.ai/prompt/modern%203d%20glassmorphism%20app%20icon%20solar%20panel%20technology%20sun%20energy%20neon%20blue%20purple%20gradient%20dark%20background%20minimalist%20vector?width=512&height=512&nologo=true",
       "type": "image/png",
-      "sizes": "512x512"
+      "sizes": "512x512",
+      "purpose": "any maskable"
     }
-  ],
-  "start_url": ".",
-  "display": "standalone",
-  "theme_color": "#1a202c",
-  "background_color": "#1a202c"
+  ]
 }
