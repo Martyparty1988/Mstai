@@ -51,6 +51,16 @@ const ImageAnalyzer: React.FC = () => {
         setError(null);
         setResult(null);
 
+        // Check for connected key
+        if (window.aistudio?.hasSelectedApiKey) {
+          const hasKey = await window.aistudio.hasSelectedApiKey();
+          if (!hasKey) {
+             setError("Prosím, nejprve si v nastavení připojte Gemini API klíč.");
+             setLoading(false);
+             return;
+          }
+        }
+
         if (!process.env.API_KEY) {
             setError("API key is not configured.");
             setLoading(false);
@@ -58,6 +68,7 @@ const ImageAnalyzer: React.FC = () => {
         }
 
         try {
+            // New instance per guidelines
             const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
             const base64Data = await fileToBase64(imageFile);
 
@@ -69,8 +80,9 @@ const ImageAnalyzer: React.FC = () => {
             };
             const textPart = { text: prompt };
 
+            // Using gemini-3 models as per rules
             const response = await ai.models.generateContent({
-                model: isThinkingMode ? 'gemini-2.5-pro' : 'gemini-2.5-flash',
+                model: isThinkingMode ? 'gemini-3-pro-preview' : 'gemini-3-flash-preview',
                 contents: { parts: [imagePart, textPart] },
                 ...(isThinkingMode && {
                     config: {
@@ -83,7 +95,12 @@ const ImageAnalyzer: React.FC = () => {
 
         } catch (err) {
             console.error("Gemini API call failed:", err);
-            setError(err instanceof Error ? err.message : t('ai_response_error'));
+            const msg = err instanceof Error ? err.message : t('ai_response_error');
+            if (msg.includes("Requested entity was not found")) {
+                setError("API klíč nebyl nalezen. Prosím vyberte ho znovu v nastavení.");
+            } else {
+                setError(msg);
+            }
         } finally {
             setLoading(false);
         }
@@ -101,8 +118,8 @@ const ImageAnalyzer: React.FC = () => {
     };
 
     return (
-        <div>
-            <h1 className="text-5xl font-bold text-white [text-shadow:0_4px_12px_rgba(0,0,0,0.5)] mb-8">{t('image_analyzer')}</h1>
+        <div className="animate-fade-in">
+            <h1 className="text-5xl font-bold text-white [text-shadow:0_4px_12_rgba(0,0,0,0.5)] mb-8">{t('image_analyzer')}</h1>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 {/* Image Upload & Prompt */}

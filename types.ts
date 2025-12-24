@@ -1,3 +1,4 @@
+
 export interface Worker {
   id?: number;
   name: string;
@@ -9,11 +10,13 @@ export interface Project {
   id?: number;
   name: string;
   description?: string;
-  status: 'active' | 'completed' | 'on-hold';
+  status: 'active' | 'completed' | 'on_hold';
   // Fix: Changed type from Blob to File to correctly type the plan document,
   // which includes properties like `name`.
   planFile?: File;
   aiPlanFile?: File;
+  createdAt?: Date;
+  updatedAt?: Date;
 }
 
 export interface TimeRecord {

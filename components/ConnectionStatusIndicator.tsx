@@ -19,13 +19,15 @@ const ConnectionStatusIndicator: React.FC = () => {
         };
     }, []);
 
-    const indicatorColor = isOnline ? 'bg-green-500' : 'bg-gray-500';
-    const statusText = isOnline ? t('online') : t('offline');
-
     return (
-        <div className="flex items-center gap-2" title={statusText}>
-            <div className={`w-3 h-3 rounded-full ${indicatorColor} transition-colors`}></div>
-            <span className="hidden sm:inline text-sm">{statusText}</span>
+        <div 
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-full border transition-all duration-500 ${isOnline ? 'bg-green-500/10 border-green-500/30' : 'bg-red-500/10 border-red-500/30'}`}
+            title={isOnline ? t('online') : t('offline')}
+        >
+            <div className={`w-2 h-2 rounded-full ${isOnline ? 'bg-green-500 shadow-[0_0_8px_#22c55e]' : 'bg-red-500 shadow-[0_0_8px_#ef4444]'} animate-pulse`}></div>
+            <span className="hidden sm:inline text-[10px] font-black uppercase tracking-widest text-white/80">
+                {isOnline ? t('online') : t('offline')}
+            </span>
         </div>
     );
 };

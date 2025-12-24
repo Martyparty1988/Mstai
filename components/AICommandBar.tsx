@@ -11,14 +11,12 @@ import SendIcon from './icons/SendIcon';
 import BrainIcon from './icons/BrainIcon';
 
 // SpeechRecognition setup
-// FIX: Cast window to `any` to access experimental SpeechRecognition APIs without TypeScript errors.
 const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-// FIX: Use `any` for the recognition object's type because TypeScript doesn't have built-in types for the experimental Web Speech API, and the variable `SpeechRecognition` cannot be used as a type.
 let recognition: any | null = null;
 if (SpeechRecognition) {
     recognition = new SpeechRecognition();
     recognition.continuous = false;
-    recognition.lang = 'cs-CZ'; // Default to Czech
+    recognition.lang = 'cs-CZ'; 
     recognition.interimResults = false;
     recognition.maxAlternatives = 1;
 }
@@ -32,7 +30,14 @@ const AICommandBar: React.FC = () => {
 
     const workers = useLiveQuery(() => db.workers.toArray());
     const projects = useLiveQuery(() => db.projects.toArray());
-    const sessions = useLiveQuery(() => db.attendanceSessions.toArray());
+
+    const suggestions = [
+        "Zapiš 8 hodin pro Martin na Zarasai",
+        "Dokončen stůl 28.1 na projektu Zidikai",
+        "Nastav projekt Zarasai jako dokončený",
+        "Přihlas Kuba Soldat do práce",
+        "Kolik máme hotovo na Zarasai?"
+    ];
 
     useEffect(() => {
         if(recognition) {
@@ -63,16 +68,13 @@ const AICommandBar: React.FC = () => {
         throw new Error(t('project_not_found', { name }));
     };
     
-    // API Function Handlers
     const handlers: { [key: string]: (...args: any[]) => Promise<any> } = {
         createTimeRecord: async ({ workerName, projectName, date, hours, description }: { workerName: string, projectName: string, date: string, hours: number, description: string }) => {
             const worker = findWorker(workerName);
             const project = findProject(projectName);
-            
             const startTime = new Date(date);
-            startTime.setHours(8, 0, 0, 0); // Assume work starts at 8 AM for simplicity
+            startTime.setHours(8, 0, 0, 0); 
             const endTime = new Date(startTime.getTime() + hours * 60 * 60 * 1000);
-
             const newRecord: Omit<TimeRecord, 'id'> = {
                 workerId: worker.id!,
                 projectId: project.id!,
@@ -80,121 +82,135 @@ const AICommandBar: React.FC = () => {
                 endTime,
                 description: description || `Work on ${project.name}`,
             };
-
             const newId = await db.records.add(newRecord as TimeRecord);
             await processRecordDescription({ ...newRecord, id: newId } as TimeRecord);
-            return `Time record created for ${worker.name} on ${project.name} for ${hours} hours.`;
+            return `Záznam vytvořen pro ${worker.name} na ${project.name} (${hours}h).`;
         },
         clockIn: async ({ workerName }: { workerName: string }) => {
             const worker = findWorker(workerName);
             const existingSession = await db.attendanceSessions.where('workerId').equals(worker.id!).first();
-            if (existingSession) return `${worker.name} is already clocked in.`;
-            
+            if (existingSession) return `${worker.name} už je přihlášen.`;
             await db.attendanceSessions.add({ workerId: worker.id!, startTime: new Date() });
-            return `${worker.name} has been clocked in.`;
+            return `${worker.name} byl přihlášen do práce.`;
         },
         clockOut: async ({ workerName, projectName, description }: { workerName: string, projectName: string, description: string }) => {
             const worker = findWorker(workerName);
             const project = findProject(projectName);
-
             const session = await db.attendanceSessions.where('workerId').equals(worker.id!).first();
-            if (!session) return `${worker.name} is not clocked in.`;
-            
+            if (!session) return `${worker.name} není přihlášen.`;
             await db.transaction('rw', db.records, db.attendanceSessions, async () => {
                 const newRecordData: Omit<TimeRecord, 'id'> = {
                     workerId: session.workerId,
                     projectId: project.id!,
                     startTime: session.startTime,
                     endTime: new Date(),
-                    description: description || `Completed work on ${project.name}`,
+                    description: description || `Dokončena práce na ${project.name}`,
                 };
                 const newId = await db.records.add(newRecordData as TimeRecord);
                 await processRecordDescription({ ...newRecordData, id: newId } as TimeRecord);
                 await db.attendanceSessions.delete(session.id!);
             });
-            return `${worker.name} has been clocked out from ${project.name}.`;
+            return `${worker.name} byl odhlášen z ${project.name}.`;
         },
-        updateTableStatus: async ({ projectName, tableCode, status }: { projectName: string, tableCode: string, status: 'pending' | 'completed' }) => {
+        updateTableStatus: async ({ projectName, tableCode, status, workerName }: { projectName: string, tableCode: string, status: 'pending' | 'completed', workerName?: string }) => {
             const project = findProject(projectName);
-            const table = await db.solarTables.where({ projectId: project.id!, tableCode }).first();
+            let table = await db.solarTables.where({ projectId: project.id!, tableCode }).first();
+            let tableId = table?.id;
 
             if (table) {
                 await db.solarTables.update(table.id!, { status });
-                return t('table_updated', { code: tableCode, project: project.name, status });
             } else {
-                // Table not found, create it with default values.
-                const getTableTypeFromCode = (code: string): 'small' | 'medium' | 'large' => {
-                    const c = code.toLowerCase();
-                    if (c.startsWith('it28')) return 'small';
-                    if (c.startsWith('it42')) return 'medium';
-                    if (c.startsWith('it56')) return 'large';
-                    return 'small'; // Default to 'small' if type cannot be determined
-                };
-
                 const newTable: Omit<SolarTable, 'id'> = {
                     projectId: project.id!,
-                    x: 5, // Default position at top-left, user can move it on the plan.
-                    y: 5,
+                    x: 5, y: 5,
                     tableCode: tableCode,
-                    tableType: getTableTypeFromCode(tableCode),
+                    tableType: 'small',
                     status: status,
                 };
-                await db.solarTables.add(newTable as SolarTable);
-                return t('table_not_found_and_created', { code: tableCode, project: project.name, status });
+                tableId = await db.solarTables.add(newTable as SolarTable);
             }
+
+            if (workerName && tableId) {
+                const worker = findWorker(workerName);
+                await db.transaction('rw', db.tableAssignments, db.tableStatusHistory, async () => {
+                    const existingAssignment = await db.tableAssignments.where({ tableId: tableId!, workerId: worker.id! }).first();
+                    if (!existingAssignment) await db.tableAssignments.add({ tableId: tableId!, workerId: worker.id! });
+                    await db.tableStatusHistory.add({ tableId: tableId!, workerId: worker.id!, status: status, timestamp: new Date() });
+                });
+                return t('table_updated_assigned', { code: tableCode, project: project.name, status, worker: worker.name });
+            }
+            return t('table_updated', { code: tableCode, project: project.name, status });
+        },
+        updateProjectStatus: async ({ projectName, status }: { projectName: string, status: 'active' | 'completed' | 'on_hold' }) => {
+            const project = findProject(projectName);
+            await db.projects.update(project.id!, { status });
+            return `Status projektu ${project.name} byl změněn na ${status}.`;
         }
     };
 
-    const tools: { functionDeclarations: FunctionDeclaration[] }[] = [{
+    const tools = [{
         functionDeclarations: [
             {
                 name: 'createTimeRecord',
-                description: 'Creates a work time record for a worker on a specific project.',
+                description: 'Creates a work time record.',
                 parameters: {
                     type: Type.OBJECT,
                     properties: {
-                        workerName: { type: Type.STRING, description: 'The name of the worker.' },
-                        projectName: { type: Type.STRING, description: 'The name of the project.' },
-                        date: { type: Type.STRING, description: 'The date of the work in YYYY-MM-DD format. If not specified, assume today.' },
-                        hours: { type: Type.NUMBER, description: 'The duration of the work in hours.' },
-                        description: { type: Type.STRING, description: 'A brief description of the work done.' },
+                        workerName: { type: Type.STRING },
+                        projectName: { type: Type.STRING },
+                        date: { type: Type.STRING },
+                        hours: { type: Type.NUMBER },
+                        description: { type: Type.STRING },
                     },
-                    required: ['workerName', 'projectName', 'date', 'hours', 'description'],
+                    required: ['workerName', 'projectName', 'hours'],
                 },
             },
             {
                 name: 'clockIn',
-                description: 'Clocks in a worker, starting their attendance session.',
+                description: 'Clocks in a worker.',
                 parameters: {
                     type: Type.OBJECT,
-                    properties: { workerName: { type: Type.STRING, description: 'The name of the worker to clock in.' } },
+                    properties: { workerName: { type: Type.STRING } },
                     required: ['workerName'],
                 }
             },
             {
                 name: 'clockOut',
-                description: 'Clocks out a worker, ending their session and creating a time record.',
+                description: 'Clocks out a worker.',
                 parameters: {
                     type: Type.OBJECT,
                     properties: {
-                        workerName: { type: Type.STRING, description: 'The name of the worker to clock out.' },
-                        projectName: { type: Type.STRING, description: 'The project they were working on.' },
-                        description: { type: Type.STRING, description: 'A brief description of the work done.' },
+                        workerName: { type: Type.STRING },
+                        projectName: { type: Type.STRING },
+                        description: { type: Type.STRING },
                     },
-                    required: ['workerName', 'projectName', 'description'],
+                    required: ['workerName', 'projectName'],
                 }
             },
             {
                 name: 'updateTableStatus',
-                description: 'Updates the status of a solar table on a project plan.',
+                description: 'Updates solar table status.',
                 parameters: {
                     type: Type.OBJECT,
                     properties: {
-                        projectName: { type: Type.STRING, description: 'The name of the project.' },
-                        tableCode: { type: Type.STRING, description: 'The code of the table, e.g., "iT28-1.1" or "28.1".' },
-                        status: { type: Type.STRING, enum: ['pending', 'completed'], description: 'The new status of the table.' }
+                        projectName: { type: Type.STRING },
+                        tableCode: { type: Type.STRING },
+                        status: { type: Type.STRING, enum: ['pending', 'completed'] },
+                        workerName: { type: Type.STRING }
                     },
                     required: ['projectName', 'tableCode', 'status'],
+                }
+            },
+            {
+                name: 'updateProjectStatus',
+                description: 'Updates the overall status of a project (active, completed, on_hold).',
+                parameters: {
+                    type: Type.OBJECT,
+                    properties: {
+                        projectName: { type: Type.STRING },
+                        status: { type: Type.STRING, enum: ['active', 'completed', 'on_hold'] }
+                    },
+                    required: ['projectName', 'status'],
                 }
             }
         ]
@@ -202,22 +218,34 @@ const AICommandBar: React.FC = () => {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!prompt.trim() || !process.env.API_KEY) return;
+        if (!prompt.trim()) return;
+
+        // Check for connected key
+        if (window.aistudio?.hasSelectedApiKey) {
+          const hasKey = await window.aistudio.hasSelectedApiKey();
+          if (!hasKey) {
+             showStatus("Připojte Gemini API klíč v nastavení.");
+             return;
+          }
+        }
+
+        if (!process.env.API_KEY) {
+            showStatus("API key is not configured.");
+            return;
+        }
 
         setIsLoading(true);
         setStatusMessage(t('processing'));
 
         try {
+            // New instance per guidelines
             const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
             const today = new Date().toISOString().split('T')[0];
 
             const response = await ai.models.generateContent({
-                model: 'gemini-2.5-pro',
-                contents: `Context: Today's date is ${today}. The available workers are: ${workers?.map(w => w.name).join(', ')}. The available projects are: ${projects?.map(p => p.name).join(', ')}. User command: "${prompt}"`,
-                config: {
-                    tools,
-                    thinkingConfig: { thinkingBudget: 32768 },
-                }
+                model: 'gemini-3-pro-preview',
+                contents: `Context: Today is ${today}. Workers: ${workers?.map(w => w.name).join(', ')}. Projects: ${projects?.map(p => p.name).join(', ')}. User: "${prompt}"`,
+                config: { tools, thinkingConfig: { thinkingBudget: 32768 } }
             });
 
             const functionCalls = response.functionCalls;
@@ -225,10 +253,7 @@ const AICommandBar: React.FC = () => {
                 for(const call of functionCalls) {
                     const { name, args } = call;
                     if (handlers[name]) {
-                        // Fill in today's date if missing for time records
-                        if (name === 'createTimeRecord' && !args.date) {
-                            args.date = today;
-                        }
+                        if (name === 'createTimeRecord' && !args.date) args.date = today;
                         const result = await handlers[name](args);
                         showStatus(result || t('command_executed_successfully'));
                     }
@@ -237,10 +262,13 @@ const AICommandBar: React.FC = () => {
             } else {
                 showStatus(response.text || t('error_executing_command'));
             }
-
         } catch (error) {
-            console.error("AI Command Bar Error:", error);
-            showStatus(error instanceof Error ? error.message : t('error_executing_command'));
+            const msg = error instanceof Error ? error.message : t('error_executing_command');
+            if (msg.includes("Requested entity was not found")) {
+                showStatus("API klíč nebyl nalezen. Vyberte ho v nastavení.");
+            } else {
+                showStatus(msg);
+            }
         } finally {
             setIsLoading(false);
         }
@@ -255,53 +283,73 @@ const AICommandBar: React.FC = () => {
             recognition.start();
             setIsListening(true);
             setStatusMessage(t('listening'));
-
             recognition.onresult = (event: any) => {
-                const speechResult = event.results[0][0].transcript;
-                setPrompt(speechResult);
+                setPrompt(event.results[0][0].transcript);
                 setIsListening(false);
                 setStatusMessage('');
             };
-            recognition.onspeechend = () => {
-                recognition.stop();
+            recognition.onerror = () => {
                 setIsListening(false);
-                setStatusMessage('');
-            };
-            recognition.onerror = (event: any) => {
-                console.error("Speech recognition error", event.error);
-                setIsListening(false);
-                setStatusMessage(`Error: ${event.error}`);
+                setStatusMessage('Chyba mikrofonu');
             };
         }
     };
 
     return (
-        <div className="fixed bottom-0 left-0 right-0 z-20 main-safe-area !pt-0 !pb-4">
-            <div className="relative p-2 bg-black/20 backdrop-blur-2xl rounded-2xl border border-white/10 shadow-2xl max-w-4xl mx-auto">
-                {statusMessage && (
-                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 w-auto mb-2 px-4 py-2 bg-black/50 rounded-lg text-white text-sm whitespace-nowrap">
-                        {statusMessage}
-                    </div>
-                )}
-                <form onSubmit={handleSubmit} className="flex items-center gap-2">
-                    <BrainIcon className="w-6 h-6 text-[var(--color-accent)] flex-shrink-0 ml-2" />
-                    <input
-                        type="text"
-                        value={prompt}
-                        onChange={(e) => setPrompt(e.target.value)}
-                        placeholder={t('ai_command_placeholder')}
-                        className="flex-grow w-full bg-transparent text-white placeholder-gray-400 border-none focus:ring-0 text-base"
-                        disabled={isLoading}
-                    />
-                    {recognition && (
-                        <button type="button" onClick={toggleListen} disabled={isLoading} className={`p-2 rounded-full transition-colors ${isListening ? 'bg-[var(--color-primary)] animate-pulse' : 'hover:bg-white/10'}`}>
-                            <MicrophoneIcon className="w-6 h-6 text-white"/>
+        <div className="fixed bottom-20 md:bottom-0 left-0 right-0 z-40 main-safe-area !p-4 !pt-0">
+            <div className="max-w-4xl mx-auto space-y-2">
+                {/* Suggestion Chips */}
+                <div className="flex gap-2 overflow-x-auto custom-scrollbar pb-1 px-1">
+                    {suggestions.map((s, idx) => (
+                        <button
+                            key={idx}
+                            onClick={() => setPrompt(s)}
+                            className="whitespace-nowrap px-4 py-1.5 glass-card rounded-full text-xs font-bold text-gray-300 hover:text-white hover:border-[var(--color-accent)] transition-all uppercase tracking-tighter"
+                        >
+                            {s}
                         </button>
+                    ))}
+                </div>
+
+                <div className="relative p-2 glass-card rounded-[2rem] shadow-[0_20px_50px_rgba(0,0,0,0.5)] border-white/20">
+                    {statusMessage && (
+                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 w-auto mb-4 px-6 py-2 bg-indigo-600 text-white text-sm font-black rounded-full shadow-2xl animate-bounce whitespace-nowrap">
+                            {statusMessage}
+                        </div>
                     )}
-                    <button type="submit" disabled={isLoading || !prompt.trim()} className="p-2 bg-[var(--color-primary)] rounded-full hover:bg-[var(--color-primary-hover)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-                       <SendIcon className="w-6 h-6 text-white" />
-                    </button>
-                </form>
+                    <form onSubmit={handleSubmit} className="flex items-center gap-3">
+                        <div className="p-3 bg-indigo-500/20 rounded-full ml-1">
+                            <BrainIcon className="w-6 h-6 text-indigo-400" />
+                        </div>
+                        <input
+                            type="text"
+                            value={prompt}
+                            onChange={(e) => setPrompt(e.target.value)}
+                            placeholder={t('ai_command_placeholder')}
+                            className="flex-grow w-full bg-transparent text-white placeholder-gray-500 border-none focus:ring-0 text-lg font-medium"
+                            disabled={isLoading}
+                        />
+                        <div className="flex items-center gap-2 pr-1">
+                            {recognition && (
+                                <button 
+                                    type="button" 
+                                    onClick={toggleListen} 
+                                    disabled={isLoading} 
+                                    className={`p-3 rounded-full transition-all ${isListening ? 'bg-red-500 shadow-[0_0_15px_rgba(239,68,68,0.5)]' : 'bg-white/5 hover:bg-white/10'}`}
+                                >
+                                    <MicrophoneIcon className="w-6 h-6 text-white"/>
+                                </button>
+                            )}
+                            <button 
+                                type="submit" 
+                                disabled={isLoading || !prompt.trim()} 
+                                className="p-3 bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-accent)] rounded-full hover:scale-110 active:scale-95 transition-all disabled:opacity-30 disabled:grayscale shadow-lg"
+                            >
+                               <SendIcon className="w-6 h-6 text-white" />
+                            </button>
+                        </div>
+                    </form>
+                </div>
             </div>
         </div>
     );

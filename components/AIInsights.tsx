@@ -28,6 +28,16 @@ const AIInsights: React.FC = () => {
         setError(null);
         setResult(null);
 
+        // Check for connected key
+        if (window.aistudio?.hasSelectedApiKey) {
+          const hasKey = await window.aistudio.hasSelectedApiKey();
+          if (!hasKey) {
+             setError("Prosím, nejprve si v nastavení připojte Gemini API klíč.");
+             setLoading(false);
+             return;
+          }
+        }
+
         if (!process.env.API_KEY) {
             setError("API key is not configured.");
             setLoading(false);
@@ -35,10 +45,11 @@ const AIInsights: React.FC = () => {
         }
         
         try {
+            // Per guidelines: Create a new GoogleGenAI instance right before making an API call
             const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
             
             // Sanitize project data (remove file blobs)
-            const projectsForAI = projects?.map(({planFile, ...rest}) => rest);
+            const projectsForAI = projects?.map(({planFile, aiPlanFile, ...rest}: any) => rest);
 
             // Create a map for quick worker name lookup
             const workerMap = new Map(workers?.map(w => [w.id!, w.name]));
@@ -70,8 +81,9 @@ const AIInsights: React.FC = () => {
                 "${prompt}"
             `;
 
+            // Using gemini-3-pro-preview for complex reasoning task as per rules
             const response = await ai.models.generateContent({
-                model: 'gemini-2.5-pro',
+                model: 'gemini-3-pro-preview',
                 contents: fullPrompt,
                 ...(isThinkingMode && {
                     config: {
@@ -84,7 +96,12 @@ const AIInsights: React.FC = () => {
 
         } catch (err) {
             console.error("Gemini API call failed:", err);
-            setError(t('ai_response_error'));
+            const msg = err instanceof Error ? err.message : t('ai_response_error');
+            if (msg.includes("Requested entity was not found")) {
+                setError("API klíč nebyl nalezen. Prosím vyberte ho znovu v nastavení.");
+            } else {
+                setError(msg);
+            }
         } finally {
             setLoading(false);
         }

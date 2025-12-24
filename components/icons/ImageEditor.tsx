@@ -1,7 +1,7 @@
 
 import React, { useState, useCallback } from 'react';
-import { GoogleGenAI, Modality } from '@google/genai';
-import { useI18n } from '../contexts/I18nContext';
+import { GoogleGenAI } from '@google/genai';
+import { useI18n } from '../../contexts/I18nContext';
 
 // Helper function to convert a File object to a base64 string
 const fileToBase64 = (file: File): Promise<string> => {
@@ -52,6 +52,7 @@ const ImageEditor: React.FC = () => {
         }
 
         try {
+            /* Create a new GoogleGenAI instance right before making an API call to ensure it always uses the up-to-date API key */
             const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
             const base64Data = await fileToBase64(originalImageFile);
 
@@ -70,18 +71,26 @@ const ImageEditor: React.FC = () => {
                         },
                     ],
                 },
-                config: {
-                    responseModalities: [Modality.IMAGE],
-                },
             });
 
-            const firstPart = response.candidates?.[0]?.content?.parts?.[0];
-            if (firstPart && firstPart.inlineData) {
-                const base64ImageBytes = firstPart.inlineData.data;
-                const mimeType = firstPart.inlineData.mimeType;
-                const imageUrl = `data:${mimeType};base64,${base64ImageBytes}`;
-                setEditedImageUrl(imageUrl);
-            } else {
+            /* Iterate through all parts to find the image part, as guidelines state not to assume it is the first part */
+            let foundImage = false;
+            if (response.candidates?.[0]?.content?.parts) {
+                for (const part of response.candidates[0].content.parts) {
+                    if (part.inlineData) {
+                        const base64EncodeString: string = part.inlineData.data;
+                        const mimeType = part.inlineData.mimeType || 'image/png';
+                        const imageUrl = `data:${mimeType};base64,${base64EncodeString}`;
+                        setEditedImageUrl(imageUrl);
+                        foundImage = true;
+                        break;
+                    } else if (part.text) {
+                        console.log("Model response text:", part.text);
+                    }
+                }
+            }
+
+            if (!foundImage) {
                 throw new Error("No image was generated. The model may have refused the request.");
             }
 

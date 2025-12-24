@@ -5,8 +5,6 @@ import { db } from '../services/db';
 import { useI18n } from '../contexts/I18nContext';
 import type { Worker, DailyLog, AttendanceStatus } from '../types';
 import CalendarIcon from './icons/CalendarIcon';
-import { GoogleGenAI } from '@google/genai';
-import SummaryModal from './SummaryModal';
 
 // Helper to format date to YYYY-MM-DD
 const toDateString = (date: Date): string => {
@@ -16,8 +14,6 @@ const toDateString = (date: Date): string => {
 const Attendance: React.FC = () => {
     const { t } = useI18n();
     const [selectedDate, setSelectedDate] = useState(toDateString(new Date()));
-    const [summary, setSummary] = useState<string | null>(null);
-    const [isGenerating, setIsGenerating] = useState(false);
 
     const workers = useLiveQuery(() => db.workers.toArray());
     const dailyLogs = useLiveQuery(() => db.dailyLogs.where('date').equals(selectedDate).toArray(), [selectedDate]);
@@ -50,39 +46,6 @@ const Attendance: React.FC = () => {
         }
     };
 
-    const handleGenerateSummary = async () => {
-        if (!workers) return;
-        setIsGenerating(true);
-        try {
-            if (!process.env.API_KEY) throw new Error("API key not set");
-
-            const attendanceData = workers.map(worker => {
-                const log = logsMap.get(worker.id!);
-                return {
-                    name: worker.name,
-                    status: log?.status || 'present',
-                    notes: log?.notes || ''
-                };
-            });
-
-            const prompt = `Generate a concise daily attendance summary for a construction site manager. Date: ${selectedDate}. Team attendance: ${JSON.stringify(attendanceData)}. Highlight any absences, sick leaves, or important notes.`;
-            
-            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-            const response = await ai.models.generateContent({
-                model: 'gemini-2.5-flash',
-                contents: prompt,
-            });
-
-            setSummary(response.text);
-
-        } catch (err) {
-            console.error(err);
-            alert(t('ai_response_error'));
-        } finally {
-            setIsGenerating(false);
-        }
-    };
-
     return (
         <div>
             <div className="flex items-center gap-4 mb-8">
@@ -101,13 +64,6 @@ const Attendance: React.FC = () => {
                         className="p-3 bg-black/20 text-white border border-white/20 rounded-xl focus:ring-blue-400 focus:border-blue-400 text-lg"
                     />
                 </div>
-                 <button
-                    onClick={handleGenerateSummary}
-                    disabled={isGenerating}
-                    className="px-6 py-3 bg-purple-600/80 text-white font-bold rounded-xl hover:bg-purple-600 transition-all shadow-md text-lg disabled:opacity-50"
-                >
-                    {isGenerating ? t('generating') : t('generate_daily_summary')}
-                </button>
             </div>
 
             <div className="bg-black/20 backdrop-blur-2xl rounded-3xl border border-white/10 shadow-lg overflow-hidden">
@@ -163,13 +119,6 @@ const Attendance: React.FC = () => {
                     </table>
                 </div>
             </div>
-            {summary && (
-                <SummaryModal
-                    title={t('daily_summary')}
-                    content={summary}
-                    onClose={() => setSummary(null)}
-                />
-            )}
         </div>
     );
 };

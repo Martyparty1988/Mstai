@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { db } from '../services/db';
 import type { Worker } from '../types';
@@ -42,47 +43,55 @@ const WorkerForm: React.FC<WorkerFormProps> = ({ worker, onClose }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/30 backdrop-blur-lg p-4">
-      <div className="w-full max-w-lg p-8 bg-black/20 backdrop-blur-2xl rounded-3xl shadow-xl border border-white/10">
-        <h2 className="text-3xl font-bold mb-6 text-white">{worker ? t('edit_worker') : t('add_worker')}</h2>
-        <form onSubmit={handleSubmit} className="space-y-6">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 animate-fade-in">
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-md" onClick={onClose}></div>
+      <div className="relative w-full max-w-lg p-10 bg-slate-900/90 backdrop-blur-3xl rounded-[3rem] shadow-2xl border border-white/20 transform transition-all scale-100">
+        <h2 className="text-4xl font-black mb-8 text-white tracking-tighter uppercase italic border-b border-white/10 pb-6">
+            {worker ? t('edit_worker') : t('add_worker')}
+        </h2>
+        <form onSubmit={handleSubmit} className="space-y-8">
           <div>
-            <label htmlFor="name" className="block text-lg font-medium text-gray-300 mb-2">{t('worker_name')}</label>
+            <label htmlFor="name" className="block text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-3 ml-1">{t('worker_name')}</label>
             <input
               type="text"
               id="name"
               value={name}
               onChange={(e) => setName(e.target.value)}
               required
-              className="mt-1 block w-full p-4 bg-black/20 text-white placeholder-gray-400 border border-white/20 rounded-xl focus:ring-blue-400 focus:border-blue-400 text-lg"
+              autoFocus
+              className="w-full p-5 bg-black/40 text-white placeholder-gray-500 text-lg font-bold rounded-2xl shadow-inner border border-white/10 transition-all"
+              placeholder="e.g. John Doe"
             />
           </div>
           {user?.role === 'admin' && (
             <div>
-              <label htmlFor="hourlyRate" className="block text-lg font-medium text-gray-300 mb-2">{t('hourly_rate')}</label>
-              <input
-                type="number"
-                id="hourlyRate"
-                value={hourlyRate}
-                onChange={(e) => setHourlyRate(e.target.value)}
-                required
-                step="0.01"
-                min="0"
-                className="mt-1 block w-full p-4 bg-black/20 text-white placeholder-gray-400 border border-white/20 rounded-xl focus:ring-blue-400 focus:border-blue-400 text-lg"
-              />
+              <label htmlFor="hourlyRate" className="block text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-3 ml-1">{t('hourly_rate')}</label>
+              <div className="relative">
+                  <span className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-500 font-black">€</span>
+                  <input
+                    type="number"
+                    id="hourlyRate"
+                    value={hourlyRate}
+                    onChange={(e) => setHourlyRate(e.target.value)}
+                    required
+                    step="0.01"
+                    min="0"
+                    className="w-full p-5 pl-10 bg-black/40 text-white placeholder-gray-500 text-lg font-bold rounded-2xl shadow-inner border border-white/10 transition-all"
+                  />
+              </div>
             </div>
           )}
-          <div className="flex justify-end space-x-4 pt-4">
+          <div className="flex justify-end gap-4 pt-6 border-t border-white/10">
             <button
               type="button"
               onClick={onClose}
-              className="px-6 py-3 bg-white/10 text-white font-bold rounded-xl hover:bg-white/20 transition-colors text-lg"
+              className="px-8 py-4 bg-white/5 text-white font-black rounded-2xl hover:bg-white/10 transition-colors uppercase tracking-widest text-xs"
             >
               {t('cancel')}
             </button>
             <button
               type="submit"
-              className="px-6 py-3 bg-[var(--color-primary)] text-white font-bold rounded-xl hover:bg-[var(--color-primary-hover)] transition-all shadow-md text-lg"
+              className="px-8 py-4 bg-white text-black font-black rounded-2xl hover:bg-[var(--color-accent)] hover:text-white transition-all shadow-xl uppercase tracking-widest text-xs active:scale-95"
             >
               {t('save')}
             </button>

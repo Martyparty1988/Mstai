@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
   <head>
@@ -13,10 +14,10 @@
     <style>
       :root, [data-theme="nova"] {
         --bg-gradient: linear-gradient(160deg, #020024 0%, #090979 35%, #00d4ff 100%);
-        --color-primary: #6366f1; /* indigo-500 */
-        --color-primary-hover: #818cf8; /* indigo-400 */
-        --color-secondary: #0e7490; /* cyan-700 */
-        --color-accent: #38bdf8; /* sky-400 */
+        --color-primary: #6366f1;
+        --color-primary-hover: #818cf8;
+        --color-secondary: #0e7490;
+        --color-accent: #38bdf8;
         --color-chart-1: #6366f1;
         --color-chart-2: #38bdf8;
         --color-chart-3: #00d4ff;
@@ -35,10 +36,10 @@
       
       [data-theme="aether"] {
         --bg-gradient: linear-gradient(145deg, #f0f9ff 0%, #e0f2fe 100%);
-        --color-primary: #0ea5e9; /* sky-500 */
-        --color-primary-hover: #38bdf8; /* sky-400 */
-        --color-secondary: #06b6d4; /* cyan-500 */
-        --color-accent: #22d3ee; /* cyan-400 */
+        --color-primary: #0ea5e9;
+        --color-primary-hover: #38bdf8;
+        --color-secondary: #06b6d4;
+        --color-accent: #22d3ee;
         --color-chart-1: #0ea5e9;
         --color-chart-2: #22d3ee;
         --color-chart-3: #67e8f9;
@@ -46,8 +47,8 @@
 
       [data-theme="cobalt"] {
         --bg-gradient: linear-gradient(135deg, #0052D4 0%, #4364F7 50%, #6FB1FC 100%);
-        --color-primary: #2563eb; /* blue-600 */
-        --color-primary-hover: #3b82f6; /* blue-500 */
+        --color-primary: #2563eb;
+        --color-primary-hover: #3b82f6;
         --color-secondary: #4364F7;
         --color-accent: #6FB1FC;
         --color-chart-1: #2563eb;
@@ -57,8 +58,8 @@
 
       [data-theme="inferno"] {
         --bg-gradient: linear-gradient(135deg, #ff7e5f 0%, #feb47b 100%);
-        --color-primary: #f97316; /* orange-500 */
-        --color-primary-hover: #fb923c; /* orange-400 */
+        --color-primary: #f97316;
+        --color-primary-hover: #fb923c;
         --color-secondary: #feb47b;
         --color-accent: #ff7e5f;
         --color-chart-1: #f97316;
@@ -68,8 +69,8 @@
 
       [data-theme="hunter"] {
         --bg-gradient: linear-gradient(135deg, #5A3F37 0%, #2C7744 100%);
-        --color-primary: #16a34a; /* green-600 */
-        --color-primary-hover: #22c55e; /* green-500 */
+        --color-primary: #16a34a;
+        --color-primary-hover: #22c55e;
         --color-secondary: #2C7744;
         --color-accent: #5A3F37;
         --color-chart-1: #16a34a;
@@ -79,21 +80,21 @@
       
       [data-theme="carbon"] {
         --bg-gradient: linear-gradient(135deg, #434343 0%, #000000 100%);
-        --color-primary: #ef4444; /* red-500 */
-        --color-primary-hover: #f87171; /* red-400 */
+        --color-primary: #ef4444;
+        --color-primary-hover: #f87171;
         --color-secondary: #434343;
         --color-accent: #ef4444;
         --color-chart-1: #ef4444;
-        --color-chart-2: #7f1d1d; /* red-800 */
-        --color-chart-3: #b91c1c; /* red-700 */
+        --color-chart-2: #7f1d1d;
+        --color-chart-3: #b91c1c;
       }
 
       [data-theme="emerald"] {
         --bg-gradient: linear-gradient(135deg, #06202A 0%, #2C5364 100%);
-        --color-primary: #10b981; /* emerald-500 */
-        --color-primary-hover: #34d399; /* emerald-400 */
+        --color-primary: #10b981;
+        --color-primary-hover: #34d399;
         --color-secondary: #2C5364;
-        --color-accent: #6ee7b7; /* emerald-300 */
+        --color-accent: #6ee7b7;
         --color-chart-1: #10b981;
         --color-chart-2: #6ee7b7;
         --color-chart-3: #34d399;
@@ -101,10 +102,10 @@
 
       [data-theme="crimson"] {
         --bg-gradient: linear-gradient(135deg, #23074d 0%, #cc5333 100%);
-        --color-primary: #dc2626; /* red-600 */
-        --color-primary-hover: #ef4444; /* red-500 */
+        --color-primary: #dc2626;
+        --color-primary-hover: #ef4444;
         --color-secondary: #cc5333;
-        --color-accent: #f87171; /* red-400 */
+        --color-accent: #f87171;
         --color-chart-1: #dc2626;
         --color-chart-2: #f87171;
         --color-chart-3: #ef4444;
@@ -112,24 +113,65 @@
 
       [data-theme="oceanic"] {
         --bg-gradient: linear-gradient(135deg, #093028 0%, #237A57 100%);
-        --color-primary: #0d9488; /* teal-600 */
-        --color-primary-hover: #2dd4bf; /* teal-400 */
+        --color-primary: #0d9488;
+        --color-primary-hover: #2dd4bf;
         --color-secondary: #237A57;
-        --color-accent: #5eead4; /* teal-300 */
+        --color-accent: #5eead4;
         --color-chart-1: #0d9488;
         --color-chart-2: #5eead4;
         --color-chart-3: #2dd4bf;
       }
 
-      body {
+      * {
+        transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease, transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s ease;
+      }
+
+      html {
         background: var(--bg-gradient);
         background-attachment: fixed;
-        overscroll-behavior-y: contain; /* Prevents pull-to-refresh for a native feel */
+        min-height: 100%;
+        font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+        position: relative;
+        overflow-x: hidden;
+      }
+
+      html::before {
+        content: "";
+        position: fixed;
+        top: 0; left: 0; width: 100%; height: 100%;
+        background: radial-gradient(circle at 50% 50%, rgba(255,255,255,0.05) 0%, transparent 100%);
+        pointer-events: none;
+        z-index: -1;
+      }
+
+      body {
+        overscroll-behavior-y: contain;
+        color: white; /* Default high contrast */
+      }
+
+      /* Transitions */
+      @keyframes page-enter {
+        from { opacity: 0; transform: translateY(12px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+
+      @keyframes list-item-enter {
+        from { opacity: 0; transform: scale(0.96) translateY(10px); }
+        to { opacity: 1; transform: scale(1) translateY(0); }
+      }
+
+      .animate-page-enter {
+        animation: page-enter 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+      }
+
+      .animate-list-item {
+        opacity: 0;
+        animation: list-item-enter 0.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
       }
 
       @keyframes shimmer {
-        0% { background-position: -500% 0; }
-        100% { background-position: 500% 0; }
+        0% { background-position: -200% 0; }
+        100% { background-position: 200% 0; }
       }
 
       .text-shimmer {
@@ -143,73 +185,104 @@
         background-clip: text;
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
-        animation: shimmer 8s linear infinite;
+        animation: shimmer 5s linear infinite;
+        filter: drop-shadow(0 2px 10px rgba(255,255,255,0.2));
       }
       
-
-      .admin-indicator {
-        box-shadow: inset 0 -3px 0 0 var(--color-primary);
+      @keyframes float {
+        0% { transform: translateY(0px); }
+        50% { transform: translateY(-8px); }
+        100% { transform: translateY(0px); }
       }
 
-      @keyframes fadeIn {
-        from { opacity: 0; transform: translateY(10px); }
-        to { opacity: 1; transform: translateY(0); }
+      .animate-float {
+        animation: float 4s ease-in-out infinite;
       }
-      .page-fade-in {
-        animation: fadeIn 0.4s ease-out forwards;
+
+      .glass-card {
+        background: rgba(15, 23, 42, 0.4); /* Darker base for glass for readability */
+        backdrop-filter: blur(25px);
+        -webkit-backdrop-filter: blur(25px);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        box-shadow: 0 20px 60px -15px rgba(0, 0, 0, 0.6), inset 0 1px 1px rgba(255,255,255,0.1);
       }
-      
+
+      .glass-card:hover {
+        background: rgba(15, 23, 42, 0.6);
+        border-color: rgba(255, 255, 255, 0.2);
+        transform: translateY(-4px);
+      }
+
+      .custom-scrollbar::-webkit-scrollbar {
+        width: 6px;
+        height: 6px;
+      }
+      .custom-scrollbar::-webkit-scrollbar-track {
+        background: rgba(0, 0, 0, 0.2);
+      }
+      .custom-scrollbar::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.25);
+        border-radius: 10px;
+      }
+      .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+        background: rgba(255, 255, 255, 0.5);
+      }
+
+      .bottom-nav {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        z-index: 40;
+        padding-bottom: env(safe-area-inset-bottom);
+        padding-left: env(safe-area-inset-left);
+        padding-right: env(safe-area-inset-right);
+      }
+
       @supports (padding-top: env(safe-area-inset-top)) {
-        .safe-sidebar-padding {
-          padding-top: env(safe-area-inset-top);
-          padding-bottom: env(safe-area-inset-bottom);
-          padding-left: env(safe-area-inset-left);
-        }
-
         .header-safe-area {
-          padding-top: calc(1rem + env(safe-area-inset-top));
-          padding-bottom: 1rem;
-          padding-left: calc(1rem + env(safe-area-inset-left));
-          padding-right: calc(1rem + env(safe-area-inset-right));
+          padding-top: calc(0.5rem + env(safe-area-inset-top));
+          padding-bottom: 0.5rem;
         }
-        @media (min-width: 768px) {
-          .header-safe-area {
-            padding-left: calc(1.5rem + env(safe-area-inset-left));
-            padding-right: calc(1.5rem + env(safe-area-inset-right));
-          }
-        }
-        
         .main-safe-area {
-          padding-top: 1rem;
-          padding-left: calc(1rem + env(safe-area-inset-left));
-          padding-right: calc(1rem + env(safe-area-inset-right));
-          padding-bottom: calc(1rem + env(safe-area-inset-bottom));
+          padding-bottom: calc(6rem + env(safe-area-inset-bottom));
         }
         @media (min-width: 768px) {
-           .main-safe-area {
-            padding-top: 1.5rem;
-            padding-left: calc(1.5rem + env(safe-area-inset-left));
-            padding-right: calc(1.5rem + env(safe-area-inset-right));
+          .main-safe-area {
             padding-bottom: calc(1.5rem + env(safe-area-inset-bottom));
           }
         }
-        @media (min-width: 1024px) {
-          .main-safe-area {
-            padding-top: 2rem;
-            padding-left: calc(2rem + env(safe-area-inset-left));
-            padding-right: calc(2rem + env(safe-area-inset-right));
-            padding-bottom: calc(2rem + env(safe-area-inset-bottom));
-          }
-        }
+      }
+
+      input, select, textarea {
+        background: rgba(0, 0, 0, 0.5); /* Higher contrast for form elements */
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        color: white;
+        border-radius: 1rem;
+        transition: all 0.2s ease;
+      }
+
+      input:focus, select:focus, textarea:focus {
+        border-color: var(--color-accent);
+        box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.3);
+        outline: none;
+      }
+
+      /* Active interactions */
+      button:active, a:active {
+        transform: scale(0.95) !important;
+      }
+      
+      /* High readability utility */
+      .text-high-contrast {
+        color: #ffffff;
+        text-shadow: 0 2px 4px rgba(0,0,0,0.5);
       }
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
     <script>
-      // Apply theme from localStorage immediately
       const savedAppTheme = localStorage.getItem('appTheme') || 'nova';
       document.documentElement.setAttribute('data-theme', savedAppTheme);
-
-      // Apply dark mode from localStorage immediately
       if (localStorage.getItem('theme') === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
         document.documentElement.classList.add('dark');
       } else {
@@ -233,7 +306,7 @@
 }
 </script>
 </head>
-  <body class="text-gray-800 dark:text-gray-100">
+  <body class="text-white overflow-x-hidden">
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
   </body>

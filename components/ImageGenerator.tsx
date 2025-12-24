@@ -14,13 +14,23 @@ const ImageGenerator: React.FC = () => {
 
     const handleGenerate = async () => {
         if (!prompt.trim()) {
-            setError('Please enter a prompt.');
+            setError('Prosím zadejte popis obrázku.');
             return;
         }
 
         setLoading(true);
         setError(null);
         setGeneratedImageUrl(null);
+
+        // Check for connected key
+        if (window.aistudio?.hasSelectedApiKey) {
+          const hasKey = await window.aistudio.hasSelectedApiKey();
+          if (!hasKey) {
+             setError("Prosím, nejprve si v nastavení připojte Gemini API klíč.");
+             setLoading(false);
+             return;
+          }
+        }
 
         if (!process.env.API_KEY) {
             setError("API key is not configured.");
@@ -47,7 +57,12 @@ const ImageGenerator: React.FC = () => {
 
         } catch (err) {
             console.error("Gemini API call failed:", err);
-            setError(err instanceof Error ? err.message : "An unknown error occurred while generating the image.");
+            const msg = err instanceof Error ? err.message : "An unknown error occurred while generating the image.";
+             if (msg.includes("Requested entity was not found")) {
+                setError("API klíč nebyl nalezen. Prosím vyberte ho znovu v nastavení.");
+            } else {
+                setError(msg);
+            }
         } finally {
             setLoading(false);
         }
@@ -63,7 +78,7 @@ const ImageGenerator: React.FC = () => {
 
     return (
         <div>
-            <h1 className="text-5xl font-bold text-white [text-shadow:0_4px_12px_rgba(0,0,0,0.5)] mb-8">{t('image_generator')}</h1>
+            <h1 className="text-5xl font-bold text-white [text-shadow:0_4px_12_rgba(0,0,0,0.5)] mb-8">{t('image_generator')}</h1>
 
             <div className="p-6 bg-black/20 backdrop-blur-2xl rounded-3xl border border-white/10 shadow-lg mb-8 space-y-4">
                 <textarea

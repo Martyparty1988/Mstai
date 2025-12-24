@@ -1,42 +1,44 @@
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
+
+import React, { useState, useCallback, useMemo } from 'react';
 import { useI18n } from '../contexts/I18nContext';
-import { GoogleGenAI } from '@google/genai';
 import { db } from '../services/db';
-import { read, utils } from 'xlsx';
+import * as XLSX from 'xlsx';
 import Papa from 'papaparse';
+import { GoogleGenAI, Type } from '@google/genai';
 import type { Worker, Project } from '../types';
 import type { Table } from 'dexie';
+import CheckCircleIcon from './icons/CheckCircleIcon';
+import BrainIcon from './icons/BrainIcon';
+import ImageIcon from './icons/ImageIcon';
+import UploadIcon from './icons/UploadIcon';
 
-declare const pdfjsLib: any;
+interface SchemaConfig {
+  type: string;
+  required: boolean;
+  description: string;
+}
 
-// --- Helper Functions ---
-const fileToBase64 = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.readAsDataURL(file);
-        reader.onload = () => resolve((reader.result as string).split(',')[1]);
-        reader.onerror = error => reject(error);
-    });
-};
-
-const DESTINATION_SCHEMAS = {
+const DESTINATION_SCHEMAS: Record<'workers' | 'projects', Record<string, SchemaConfig>> = {
   workers: {
-    name: { type: 'string', required: true },
-    hourlyRate: { type: 'number', required: true },
+    name: { type: 'string', required: true, description: 'Worker full name' },
+    hourlyRate: { type: 'number', required: true, description: 'Worker hourly pay rate in Euro' },
   },
   projects: {
-    name: { type: 'string', required: true },
-    description: { type: 'string', required: false },
-    status: { type: "'active' | 'completed' | 'on-hold'", required: true },
+    name: { type: 'string', required: true, description: 'Unique project name' },
+    description: { type: 'string', required: false, description: 'Detailed project info' },
+    status: { type: "'active' | 'completed' | 'on_hold'", required: true, description: 'Current project state' },
   },
 };
 
 type DestinationType = keyof typeof DESTINATION_SCHEMAS;
+type ImportMethod = 'file' | 'text' | 'image';
 
 const DataImporter: React.FC = () => {
     const { t } = useI18n();
+    const [method, setMethod] = useState<ImportMethod>('file');
     const [step, setStep] = useState(1);
     const [file, setFile] = useState<File | null>(null);
+    const [pasteText, setPasteText] = useState('');
     const [rawData, setRawData] = useState<any[]>([]);
     const [headers, setHeaders] = useState<string[]>([]);
     const [destination, setDestination] = useState<DestinationType>('workers');
@@ -52,6 +54,7 @@ const DataImporter: React.FC = () => {
     const resetState = () => {
         setStep(1);
         setFile(null);
+        setPasteText('');
         setRawData([]);
         setHeaders([]);
         setMappings({});
@@ -60,11 +63,15 @@ const DataImporter: React.FC = () => {
         setImportResult(null);
     };
     
-    // --- Step 1: File Upload and Parsing ---
     const handleFile = async (selectedFile: File) => {
         setFile(selectedFile);
+        
+        if (method === 'image') {
+            handleImageOcr(selectedFile);
+            return;
+        }
+
         setIsLoading(true);
-        const fileType = selectedFile.type;
         const extension = selectedFile.name.split('.').pop()?.toLowerCase();
 
         try {
@@ -84,17 +91,17 @@ const DataImporter: React.FC = () => {
                 const reader = new FileReader();
                 reader.onload = (e) => {
                     const data = new Uint8Array(e.target?.result as ArrayBuffer);
-                    const workbook = read(data, { type: 'array' });
+                    const workbook = XLSX.read(data, { type: 'array' });
                     const sheetName = workbook.SheetNames[0];
                     const worksheet = workbook.Sheets[sheetName];
-                    const json = utils.sheet_to_json(worksheet, { header: 1 });
+                    const json = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
                     const [headerRow, ...dataRows] = json as any[][];
-                    setHeaders(headerRow);
+                    setHeaders(headerRow.map(h => String(h)));
                     setRawData(dataRows.map(row => headerRow.reduce((obj, h, i) => ({...obj, [h]: row[i]}), {})));
                     setStep(2);
                 };
                 reader.readAsArrayBuffer(selectedFile);
-            } else if (fileType === 'application/json' || extension === 'json') {
+            } else if (selectedFile.type === 'application/json' || extension === 'json') {
                  setLoadingMessage('Parsing JSON...');
                 const text = await selectedFile.text();
                 const data = JSON.parse(text);
@@ -103,36 +110,8 @@ const DataImporter: React.FC = () => {
                     setHeaders(Object.keys(data[0]));
                     setStep(2);
                 } else { throw new Error("JSON must be an array of objects."); }
-            } else if (['image/jpeg', 'image/png', 'application/pdf'].includes(fileType)) {
-                setLoadingMessage(t('ai_extraction_in_progress'));
-                 if (!process.env.API_KEY) throw new Error("API key not set");
-                const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-                
-                const base64Data = await fileToBase64(selectedFile);
-                const filePart = { inlineData: { data: base64Data, mimeType: selectedFile.type } };
-
-                const prompt = `You are an expert data extraction tool. Analyze this document/image, which contains tabular data about ${destination}. 
-                Extract all data rows. Your output MUST be a valid JSON array of objects.
-                Each object must have keys corresponding to the fields: ${destinationFields.join(', ')}.
-                Translate all extracted text values into Czech.`;
-                
-                const response = await ai.models.generateContent({
-                    model: 'gemini-2.5-pro',
-                    contents: { parts: [filePart, { text: prompt }] },
-                    config: {
-                        thinkingConfig: { thinkingBudget: 32768 },
-                    }
-                });
-
-                const resultJson = JSON.parse(response.text.replace(/```json|```/g, ''));
-                if (Array.isArray(resultJson) && resultJson.length > 0) {
-                    setRawData(resultJson);
-                    setHeaders(Object.keys(resultJson[0]));
-                    setStep(2);
-                } else { throw new Error("AI could not extract structured data."); }
-
             } else {
-                throw new Error("Unsupported file type.");
+                throw new Error("Unsupported file type for offline import.");
             }
         } catch (error) {
             alert(`Error: ${error instanceof Error ? error.message : 'Could not process file.'}`);
@@ -141,44 +120,125 @@ const DataImporter: React.FC = () => {
             setIsLoading(false);
         }
     };
-    
-    // --- Step 2: Field Mapping ---
-    useEffect(() => {
-        if (step === 2 && headers.length > 0) {
-            const autoMap = async () => {
-                setIsLoading(true);
-                setLoadingMessage(t('auto_mapping_in_progress'));
-                try {
-                    if (!process.env.API_KEY) throw new Error("API key not set");
-                    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-                    const schema = DESTINATION_SCHEMAS[destination];
-                    const prompt = `Map the source columns to the destination fields. Source: [${headers.join(', ')}]. Destination schema: ${JSON.stringify(schema)}. Respond ONLY with a valid JSON object where keys are the source columns and values are the corresponding destination fields. If a column doesn't map, use null as the value.`;
-                    
-                    const response = await ai.models.generateContent({
-                      model: 'gemini-2.5-flash',
-                      contents: prompt,
-                    });
-                    
-                    const suggestedMappings = JSON.parse(response.text.replace(/```json|```/g, ''));
-                    const validMappings: { [key: string]: string } = {};
-                    for(const header of headers) {
-                        const destField = suggestedMappings[header];
-                        if (destField && destinationFields.includes(destField)) {
-                            validMappings[header] = destField;
+
+    const handleSmartPaste = async () => {
+        if (!pasteText.trim() || !process.env.API_KEY) return;
+        setIsLoading(true);
+        setLoadingMessage(t('extracting_data'));
+
+        try {
+            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            // Fix: Cast schema to properly typed record to avoid property access errors on generic string keys
+            const schema = DESTINATION_SCHEMAS[destination] as Record<string, SchemaConfig>;
+            const schemaString = JSON.stringify(schema);
+
+            const response = await ai.models.generateContent({
+                model: 'gemini-3-flash-preview',
+                contents: `Extract ${destination} from this text. REQUIRED SCHEMA: ${schemaString}. TEXT: "${pasteText}"`,
+                config: {
+                    responseMimeType: 'application/json',
+                    responseSchema: {
+                        type: Type.ARRAY,
+                        items: {
+                            type: Type.OBJECT,
+                            properties: Object.keys(schema).reduce((acc, key) => ({
+                                ...acc,
+                                [key]: { type: schema[key].type === 'number' ? Type.NUMBER : Type.STRING }
+                            }), {}),
+                            required: Object.keys(schema).filter(k => schema[k].required)
                         }
                     }
-                    setMappings(validMappings);
-                } catch(error) {
-                    console.error("Auto-mapping failed", error);
-                } finally {
-                    setIsLoading(false);
                 }
-            };
-            autoMap();
-        }
-    }, [step, headers, destination]);
+            });
 
-    // --- Step 3: Preview ---
+            const extractedData = JSON.parse(response.text);
+            setRawData(extractedData);
+            setHeaders(Object.keys(schema));
+            // Auto mapping for AI extracted data
+            const autoMap: any = {};
+            Object.keys(schema).forEach(k => autoMap[k] = k);
+            setMappings(autoMap);
+            setStep(3);
+        } catch (error) {
+            console.error(error);
+            alert(t('ai_import_error'));
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleImageOcr = async (imageFile: File) => {
+        if (!process.env.API_KEY) return;
+        setIsLoading(true);
+        setLoadingMessage(t('ocr_processing'));
+
+        try {
+            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            const reader = new FileReader();
+            const base64Data = await new Promise<string>((resolve) => {
+                reader.onload = () => resolve((reader.result as string).split(',')[1]);
+                reader.readAsDataURL(imageFile);
+            });
+
+            const schema = DESTINATION_SCHEMAS[destination];
+            const response = await ai.models.generateContent({
+                model: 'gemini-2.5-flash-image',
+                contents: {
+                    parts: [
+                        { inlineData: { data: base64Data, mimeType: imageFile.type } },
+                        { text: `Parse this image and extract a list of ${destination}. Output JSON matching this schema: ${JSON.stringify(schema)}` }
+                    ]
+                },
+                config: { responseMimeType: 'application/json' }
+            });
+
+            const extractedData = JSON.parse(response.text);
+            setRawData(Array.isArray(extractedData) ? extractedData : [extractedData]);
+            setHeaders(Object.keys(schema));
+            const autoMap: any = {};
+            Object.keys(schema).forEach(k => autoMap[k] = k);
+            setMappings(autoMap);
+            setStep(3);
+        } catch (error) {
+            console.error(error);
+            alert(t('ai_import_error'));
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleMagicMap = async () => {
+        if (headers.length === 0 || !process.env.API_KEY) return;
+        setIsLoading(true);
+        setLoadingMessage('AI mapping...');
+
+        try {
+            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            const destFields = Object.keys(DESTINATION_SCHEMAS[destination]);
+            
+            const response = await ai.models.generateContent({
+                model: 'gemini-3-flash-preview',
+                contents: `Match these source headers [${headers.join(', ')}] to these destination fields [${destFields.join(', ')}]. Output only a JSON object where key is source header and value is destination field. If no match, value should be null.`,
+                config: { responseMimeType: 'application/json' }
+            });
+
+            const aiMappings = JSON.parse(response.text);
+            setMappings(aiMappings);
+        } catch (error) {
+            console.error(error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    // Fix: Explicitly type Object.entries to SchemaConfig to fix "Property 'required' does not exist on type 'unknown'"
+    const requiredFields = (Object.entries(DESTINATION_SCHEMAS[destination]) as [string, SchemaConfig][])
+        .filter(([_, config]) => config.required)
+        .map(([key]) => key);
+    
+    const mappedDestinationFields = Object.values(mappings);
+    const missingFields = requiredFields.filter(f => !mappedDestinationFields.includes(f));
+
     const previewData = useMemo(() => {
         if (step !== 3) return [];
         return rawData.slice(0, 5).map(row => {
@@ -189,21 +249,13 @@ const DataImporter: React.FC = () => {
             }
             return newRow;
         });
-    }, [step, rawData, mappings, destination, destinationFields]);
+    }, [step, rawData, mappings, destinationFields]);
     
-    // --- Step 4: Import ---
     const handleImport = async () => {
         setStep(4);
         setIsLoading(true);
         
         let newCount = 0, updatedCount = 0, skippedCount = 0;
-        const warnings: string[] = [];
-
-        const unmappedHeaders = headers.filter(h => !Object.keys(mappings).includes(h) || !mappings[h]);
-        if (unmappedHeaders.length > 0) {
-            warnings.push(t('unmapped_columns_were_ignored', {count: unmappedHeaders.length}));
-        }
-
         const table = db[destination];
 
         for (const row of rawData) {
@@ -211,11 +263,13 @@ const DataImporter: React.FC = () => {
             let uniqueIdentifier: string | null = null;
             
             for (const header in mappings) {
-                if (mappings[header]) {
-                    newRecord[mappings[header]] = row[header];
-                    if (mappings[header] === 'name') {
-                        uniqueIdentifier = row[header];
-                    }
+                const destField = mappings[header];
+                if (destField) {
+                    let val = row[header];
+                    // Basic type casting
+                    if (DESTINATION_SCHEMAS[destination][destField]?.type === 'number') val = Number(val);
+                    newRecord[destField] = val;
+                    if (destField === 'name') uniqueIdentifier = String(val);
                 }
             }
 
@@ -224,11 +278,7 @@ const DataImporter: React.FC = () => {
             }
 
             if (!uniqueIdentifier) {
-                if (destination === 'workers') {
-                    await (table as Table<Worker>).add(newRecord as Worker);
-                } else if (destination === 'projects') {
-                    await (table as Table<Project>).add(newRecord as Project);
-                }
+                await (table as any).add(newRecord);
                 newCount++;
                 continue;
             }
@@ -244,132 +294,218 @@ const DataImporter: React.FC = () => {
                     updatedCount++;
                 }
             } else {
-                if (destination === 'workers') {
-                    await (table as Table<Worker>).add(newRecord as Worker);
-                } else if (destination === 'projects') {
-                    await (table as Table<Project>).add(newRecord as Project);
-                }
+                await (table as any).add(newRecord);
                 newCount++;
             }
         }
         
-        setImportResult({ new: newCount, updated: updatedCount, skipped: skippedCount, warnings });
+        setImportResult({ new: newCount, updated: updatedCount, skipped: skippedCount, warnings: [] });
         setIsLoading(false);
     };
 
     const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
         e.preventDefault();
-        e.stopPropagation();
         setIsDragOver(false);
-        if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-            handleFile(e.dataTransfer.files[0]);
-        }
+        if (e.dataTransfer.files?.[0]) handleFile(e.dataTransfer.files[0]);
     };
 
-    const handleDragEvents = (e: React.DragEvent<HTMLDivElement>) => {
-        e.preventDefault();
-        e.stopPropagation();
-        if (e.type === 'dragenter' || e.type === 'dragover') {
-            setIsDragOver(true);
-        } else if (e.type === 'dragleave') {
-            setIsDragOver(false);
-        }
-    };
-
-    // --- RENDER LOGIC ---
     return (
         <div>
-            <h1 className="text-5xl font-bold text-white [text-shadow:0_4px_12px_rgba(0,0,0,0.5)] mb-8">{t('import_data_title')}</h1>
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+                <h1 className="text-5xl font-bold text-white [text-shadow:0_4px_12px_rgba(0,0,0,0.5)]">{t('import_data_title')}</h1>
+                <div className="flex bg-black/20 p-1 rounded-2xl border border-white/10 backdrop-blur-xl shrink-0">
+                    {(['file', 'text', 'image'] as const).map(m => (
+                        <button 
+                            key={m}
+                            onClick={() => { setMethod(m); resetState(); }}
+                            className={`px-4 py-2 rounded-xl text-sm font-black uppercase transition-all flex items-center gap-2 ${method === m ? 'bg-[var(--color-primary)] text-white shadow-lg' : 'text-gray-400 hover:text-white'}`}
+                        >
+                            {m === 'file' && <UploadIcon className="w-4 h-4" />}
+                            {m === 'text' && <BrainIcon className="w-4 h-4" />}
+                            {m === 'image' && <ImageIcon className="w-4 h-4" />}
+                            {t(m === 'file' ? 'file_upload' : m === 'text' ? 'smart_paste' : 'image_ocr')}
+                        </button>
+                    ))}
+                </div>
+            </div>
 
-            <div className="p-8 bg-black/20 backdrop-blur-2xl rounded-3xl border border-white/10 shadow-lg min-h-[60vh]">
-                {isLoading && <div className="absolute inset-0 bg-black/50 backdrop-blur-sm z-10 flex flex-col items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white"></div><p className="mt-4 text-white">{loadingMessage}</p></div>}
+            <div className="p-8 bg-black/20 backdrop-blur-2xl rounded-[3rem] border border-white/10 shadow-2xl min-h-[60vh] relative overflow-hidden">
+                {isLoading && <div className="absolute inset-0 bg-black/60 backdrop-blur-md z-50 flex flex-col items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mb-4"></div><p className="text-white text-xl font-black uppercase tracking-widest">{loadingMessage}</p></div>}
                 
-                {/* --- Step 1: Upload --- */}
                 {step === 1 && (
-                    <div>
-                        <h2 className="text-3xl font-bold mb-6 text-white">{t('step_1_upload_title')}</h2>
-                        <div className="space-y-6">
-                            <div>
-                                <label htmlFor="destination" className="block text-lg font-medium text-gray-300 mb-2">{t('select_import_type')}</label>
-                                <select id="destination" value={destination} onChange={e => setDestination(e.target.value as DestinationType)} className="w-full max-w-sm p-4 bg-black/20 text-white border border-white/20 rounded-xl focus:ring-blue-400 focus:border-blue-400 text-lg [&>option]:bg-gray-800">
+                    <div className="animate-fade-in space-y-8">
+                        <div className="flex flex-col md:flex-row gap-8 items-end">
+                            <div className="w-full max-w-sm">
+                                <label className="block text-sm font-black text-gray-400 uppercase mb-2 tracking-widest">{t('select_import_type')}</label>
+                                <select value={destination} onChange={e => setDestination(e.target.value as DestinationType)} className="w-full p-4 bg-black/40 text-white border border-white/10 rounded-2xl focus:ring-2 focus:ring-[var(--color-accent)] outline-none text-lg font-bold [&>option]:bg-gray-800">
                                     <option value="workers">{t('workers')}</option>
                                     <option value="projects">{t('projects')}</option>
                                 </select>
                             </div>
-                            <div 
-                                onDrop={handleDrop} onDragEnter={handleDragEvents} onDragLeave={handleDragEvents} onDragOver={handleDragEvents}
-                                className={`mt-1 flex justify-center px-6 pt-10 pb-12 border-2 ${isDragOver ? 'border-cyan-400' : 'border-dashed border-white/30'} rounded-xl cursor-pointer transition-colors`}
+                        </div>
+
+                        {method === 'file' && (
+                             <div 
+                                onDrop={handleDrop} onDragOver={e => { e.preventDefault(); setIsDragOver(true); }} onDragLeave={() => setIsDragOver(false)}
+                                className={`flex flex-col justify-center items-center h-80 border-4 border-dashed rounded-[2rem] cursor-pointer transition-all duration-300 ${isDragOver ? 'border-[var(--color-accent)] bg-[var(--color-accent)]/10 scale-102' : 'border-white/10 hover:border-white/30 hover:bg-white/5'}`}
                                 onClick={() => document.getElementById('file-upload-importer')?.click()}
                             >
-                                <div className="space-y-1 text-center">
-                                    <svg className="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48" aria-hidden="true"><path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                                    <div className="flex text-sm text-gray-400"><p className="pl-1">{t('upload_file_area')}</p></div>
-                                    <p className="text-xs text-gray-500">{t('supported_formats')}</p>
-                                    <input id="file-upload-importer" type="file" className="sr-only" onChange={(e) => e.target.files && handleFile(e.target.files[0])} />
-                                </div>
+                                <div className="p-6 bg-white/5 rounded-full mb-4"><UploadIcon className="w-16 h-16 text-gray-400" /></div>
+                                <p className="text-2xl font-black text-white uppercase tracking-tighter">{t('upload_file_area')}</p>
+                                <p className="text-gray-500 mt-2">CSV, Excel, JSON (Max 5MB)</p>
+                                <input id="file-upload-importer" type="file" className="sr-only" onChange={(e) => e.target.files && handleFile(e.target.files[0])} />
                             </div>
-                        </div>
+                        )}
+
+                        {method === 'text' && (
+                            <div className="space-y-4">
+                                <textarea
+                                    value={pasteText}
+                                    onChange={e => setPasteText(e.target.value)}
+                                    className="w-full h-80 p-6 bg-black/40 text-white border border-white/10 rounded-[2rem] focus:ring-2 focus:ring-[var(--color-accent)] outline-none text-lg font-medium resize-none custom-scrollbar"
+                                    placeholder={t('smart_paste_placeholder')}
+                                />
+                                <button 
+                                    onClick={handleSmartPaste}
+                                    disabled={!pasteText.trim()}
+                                    className="w-full py-5 bg-indigo-600 text-white font-black rounded-2xl hover:bg-indigo-500 transition-all shadow-xl uppercase tracking-widest disabled:opacity-30 flex items-center justify-center gap-3"
+                                >
+                                    <BrainIcon className="w-6 h-6" />
+                                    {t('smart_paste')}
+                                </button>
+                            </div>
+                        )}
+
+                        {method === 'image' && (
+                            <div 
+                                onDrop={handleDrop} onDragOver={e => { e.preventDefault(); setIsDragOver(true); }} onDragLeave={() => setIsDragOver(false)}
+                                className={`flex flex-col justify-center items-center h-80 border-4 border-dashed rounded-[2rem] cursor-pointer transition-all duration-300 ${isDragOver ? 'border-cyan-400 bg-cyan-400/10 scale-102' : 'border-white/10 hover:border-white/30 hover:bg-white/5'}`}
+                                onClick={() => document.getElementById('image-ocr-upload')?.click()}
+                            >
+                                <div className="p-6 bg-white/5 rounded-full mb-4"><ImageIcon className="w-16 h-16 text-gray-400" /></div>
+                                <p className="text-2xl font-black text-white uppercase tracking-tighter">Nahrát fotku tabulky</p>
+                                <p className="text-gray-500 mt-2">AI přečte data z obrázku (PNG, JPG)</p>
+                                <input id="image-ocr-upload" type="file" accept="image/*" className="sr-only" onChange={(e) => e.target.files && handleFile(e.target.files[0])} />
+                            </div>
+                        )}
                     </div>
                 )}
                 
-                {/* --- Step 2: Mapping --- */}
                 {step === 2 && (
-                    <div>
-                        <h2 className="text-3xl font-bold mb-6 text-white">{t('step_2_map_title')}</h2>
-                        <div className="space-y-4 max-h-96 overflow-y-auto">
+                    <div className="animate-fade-in">
+                        <div className="flex justify-between items-center mb-8">
+                            <h2 className="text-3xl font-black text-white uppercase tracking-tighter">{t('step_2_map_title')}</h2>
+                            <button 
+                                onClick={handleMagicMap}
+                                className="px-6 py-3 bg-indigo-600/20 text-indigo-400 border border-indigo-500/50 rounded-xl font-black uppercase tracking-tighter flex items-center gap-2 hover:bg-indigo-600 hover:text-white transition-all"
+                            >
+                                <BrainIcon className="w-5 h-5" />
+                                {t('magic_map')}
+                            </button>
+                        </div>
+
+                        <div className={`mb-8 p-6 rounded-3xl border ${missingFields.length === 0 ? 'bg-green-900/20 border-green-500/30' : 'bg-amber-900/20 border-amber-500/30'}`}>
+                            <h3 className={`font-black mb-3 flex items-center gap-2 uppercase tracking-widest ${missingFields.length === 0 ? 'text-green-400' : 'text-amber-400'}`}>
+                                {missingFields.length === 0 ? <CheckCircleIcon className="w-6 h-6" /> : null}
+                                {t('required_fields')}
+                            </h3>
+                            <div className="flex flex-wrap gap-3">
+                                {requiredFields.map(field => {
+                                    const isMapped = mappedDestinationFields.includes(field);
+                                    return (
+                                        <span key={field} className={`px-4 py-2 rounded-xl text-sm font-black border transition-all ${isMapped ? 'bg-green-500/20 text-green-300 border-green-500/30 shadow-[0_0_10px_rgba(34,197,94,0.2)]' : 'bg-red-500/10 text-red-300 border-red-500/20'}`}>
+                                            {field.toUpperCase()} {isMapped ? '✓' : '✗'}
+                                        </span>
+                                    );
+                                })}
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[50vh] overflow-y-auto custom-scrollbar pr-4">
                             {headers.map(header => (
-                                <div key={header} className="grid grid-cols-2 gap-4 items-center p-3 bg-white/5 rounded-lg">
-                                    <span className="font-bold text-gray-200 truncate" title={header}>{header}</span>
-                                    <select value={mappings[header] || ''} onChange={e => setMappings({...mappings, [header]: e.target.value})} className="p-2 bg-black/20 text-white border border-white/20 rounded-lg focus:ring-blue-400 focus:border-blue-400 [&>option]:bg-gray-800">
+                                <div key={header} className="p-4 bg-white/5 rounded-2xl border border-white/5 flex flex-col gap-2 hover:border-[var(--color-accent)]/30 transition-colors">
+                                    <span className="font-black text-gray-400 text-xs uppercase tracking-widest truncate">{header}</span>
+                                    <select 
+                                        value={mappings[header] || ''} 
+                                        onChange={e => setMappings({...mappings, [header]: e.target.value})} 
+                                        className="w-full p-3 bg-black/40 text-white border border-white/10 rounded-xl focus:ring-2 focus:ring-[var(--color-accent)] outline-none font-bold text-sm [&>option]:bg-gray-800"
+                                    >
                                         <option value="">{t('unmapped')}</option>
-                                        {destinationFields.map(field => <option key={field} value={field}>{field}</option>)}
+                                        {destinationFields.map(field => <option key={field} value={field}>{field}{requiredFields.includes(field) ? ' *' : ''}</option>)}
                                     </select>
                                 </div>
                             ))}
                         </div>
-                        <div className="flex justify-between mt-8">
-                            <button onClick={() => resetState()} className="px-6 py-3 bg-white/10 text-white font-bold rounded-xl hover:bg-white/20">{t('back_step')}</button>
-                            <button onClick={() => setStep(3)} className="px-6 py-3 bg-[var(--color-primary)] text-white font-bold rounded-xl hover:bg-[var(--color-primary-hover)]">{t('next_step')}</button>
+
+                        <div className="flex justify-between mt-10 pt-6 border-t border-white/10">
+                            <button onClick={() => resetState()} className="px-8 py-4 bg-white/5 text-white font-black rounded-2xl hover:bg-white/10 transition-colors uppercase tracking-widest">{t('back_step')}</button>
+                            <button 
+                                onClick={() => setStep(3)} 
+                                disabled={missingFields.length > 0}
+                                className="px-10 py-4 bg-[var(--color-primary)] text-white font-black rounded-2xl hover:bg-[var(--color-primary-hover)] transition-all shadow-xl uppercase tracking-widest disabled:opacity-30 disabled:grayscale"
+                            >
+                                {t('next_step')}
+                            </button>
                         </div>
                     </div>
                 )}
                 
-                {/* --- Step 3: Preview --- */}
                 {step === 3 && (
-                     <div>
-                        <h2 className="text-3xl font-bold mb-2 text-white">{t('step_3_preview_title')}</h2>
-                        <p className="text-gray-400 mb-6">{t('preview_data')}</p>
-                        <div className="overflow-x-auto bg-black/20 rounded-lg border border-white/10 mb-6">
-                            <table className="min-w-full">
-                                <thead className="bg-white/10"><tr className="text-left">{destinationFields.map(field => <th key={field} className="p-3 font-bold">{field}</th>)}</tr></thead>
-                                <tbody>{previewData.map((row, i) => <tr key={i} className="border-t border-white/10">{destinationFields.map(field => <td key={field} className="p-3 truncate max-w-xs">{String(row[field])}</td>)}</tr>)}</tbody>
+                     <div className="animate-fade-in">
+                        <h2 className="text-3xl font-black mb-8 text-white uppercase tracking-tighter">{t('step_3_preview_title')}</h2>
+                        <div className="overflow-x-auto bg-black/30 rounded-3xl border border-white/10 mb-8 shadow-inner custom-scrollbar">
+                            <table className="min-w-full divide-y divide-white/10">
+                                <thead className="bg-white/5">
+                                    <tr className="text-left">
+                                        {destinationFields.map(field => (
+                                            <th key={field} className="p-5 font-black text-gray-400 text-xs uppercase tracking-widest">{field}</th>
+                                        ))}
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-white/5">
+                                    {previewData.map((row, i) => (
+                                        <tr key={i} className="hover:bg-white/5 transition-colors">
+                                            {destinationFields.map(field => (
+                                                <td key={field} className="p-5 text-gray-300 font-bold truncate max-w-[200px]">{String(row[field] ?? '-')}</td>
+                                            ))}
+                                        </tr>
+                                    ))}
+                                </tbody>
                             </table>
                         </div>
-                         <div className="p-4 bg-black/20 rounded-lg">
-                            <label className="block text-lg font-medium text-gray-300 mb-2">{t('duplicates_handling')}</label>
-                            <select value={duplicateHandling} onChange={e => setDuplicateHandling(e.target.value as 'merge' | 'skip')} className="w-full max-w-sm p-3 bg-black/30 text-white border border-white/20 rounded-lg focus:ring-blue-400 focus:border-blue-400 [&>option]:bg-gray-800">
-                                <option value="skip">{t('skip_duplicates')}</option>
-                                <option value="merge">{t('merge_on_name')}</option>
-                            </select>
-                         </div>
-                        <div className="flex justify-between mt-8">
-                            <button onClick={() => setStep(2)} className="px-6 py-3 bg-white/10 text-white font-bold rounded-xl hover:bg-white/20">{t('back_step')}</button>
-                            <button onClick={handleImport} className="px-6 py-3 bg-[var(--color-primary)] text-white font-bold rounded-xl hover:bg-[var(--color-primary-hover)]">{t('start_import')}</button>
+
+                        <div className="bg-white/5 p-6 rounded-3xl border border-white/10 mb-8">
+                             <label className="block text-sm font-black text-gray-400 uppercase mb-4 tracking-widest">{t('duplicates_handling')}</label>
+                             <div className="flex gap-4">
+                                <button onClick={() => setDuplicateHandling('skip')} className={`flex-1 p-4 rounded-2xl font-black transition-all border-2 ${duplicateHandling === 'skip' ? 'bg-indigo-600 border-white text-white shadow-lg' : 'bg-black/20 border-white/10 text-gray-500'}`}>{t('skip_duplicates').toUpperCase()}</button>
+                                <button onClick={() => setDuplicateHandling('merge')} className={`flex-1 p-4 rounded-2xl font-black transition-all border-2 ${duplicateHandling === 'merge' ? 'bg-indigo-600 border-white text-white shadow-lg' : 'bg-black/20 border-white/10 text-gray-500'}`}>{t('merge_on_name').toUpperCase()}</button>
+                             </div>
+                        </div>
+
+                        <div className="flex justify-between">
+                            <button onClick={() => setStep(2)} className="px-8 py-4 bg-white/5 text-white font-black rounded-2xl hover:bg-white/10 transition-colors uppercase tracking-widest">{t('back_step')}</button>
+                            <button onClick={handleImport} className="px-10 py-4 bg-[var(--color-primary)] text-white font-black rounded-2xl hover:bg-[var(--color-primary-hover)] transition-all shadow-xl uppercase tracking-widest">{t('start_import')}</button>
                         </div>
                     </div>
                 )}
 
-                {/* --- Step 4: Results --- */}
                 {step === 4 && importResult && (
-                    <div className="text-center">
-                        <h2 className="text-3xl font-bold mb-6 text-white">{t('import_summary')}</h2>
-                        <div className="space-y-3 text-lg text-gray-200">
-                            <p className="text-green-400">{t('new_records_imported', {count: importResult.new})}</p>
-                            <p className="text-blue-400">{t('records_updated', {count: importResult.updated})}</p>
-                            <p className="text-gray-400">{t('records_skipped', {count: importResult.skipped})}</p>
-                            {importResult.warnings.length > 0 && <div className="pt-4 mt-4 border-t border-white/10"><h3 className="font-bold text-yellow-400">{t('import_warnings')}</h3><p>{importResult.warnings.join(', ')}</p></div>}
+                    <div className="text-center animate-fade-in flex flex-col items-center justify-center h-full py-12">
+                        <div className="w-24 h-24 bg-green-500/20 rounded-full flex items-center justify-center mb-8 shadow-[0_0_40px_rgba(34,197,94,0.3)] border border-green-500/50">
+                            <CheckCircleIcon className="w-12 h-12 text-green-400" />
                         </div>
-                        <button onClick={resetState} className="mt-8 px-8 py-4 bg-[var(--color-primary)] text-white font-bold rounded-xl hover:bg-[var(--color-primary-hover)]">{t('import_another_file')}</button>
+                        <h2 className="text-5xl font-black mb-10 text-white uppercase tracking-tighter">{t('import_summary')}</h2>
+                        <div className="space-y-4 w-full max-w-md bg-black/40 p-8 rounded-[2.5rem] border border-white/10 shadow-2xl">
+                            <div className="flex justify-between items-center border-b border-white/5 pb-4">
+                                <span className="text-gray-400 font-bold uppercase text-sm tracking-widest">Nové záznamy</span>
+                                <span className="text-4xl text-green-400 font-black">+{importResult.new}</span>
+                            </div>
+                            <div className="flex justify-between items-center pt-2">
+                                <span className="text-gray-400 font-bold uppercase text-sm tracking-widest">Přeskočeno</span>
+                                <span className="text-2xl text-gray-500 font-black">{importResult.skipped}</span>
+                            </div>
+                        </div>
+                        <button onClick={resetState} className="mt-12 px-12 py-5 bg-[var(--color-primary)] text-white font-black rounded-2xl hover:bg-[var(--color-primary-hover)] transition-all shadow-xl uppercase tracking-widest scale-105">{t('import_another_file')}</button>
                     </div>
                 )}
             </div>

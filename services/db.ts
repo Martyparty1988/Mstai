@@ -1,3 +1,4 @@
+
 import Dexie, { type Table } from 'dexie';
 import type { Worker, Project, TimeRecord, PlanMarker, SolarTable, TableAssignment, AttendanceSession, DailyLog, ProjectTask, ProjectComponent, PlanAnnotation, TableStatusHistory } from '../types';
 
@@ -17,7 +18,6 @@ export class MSTDatabase extends Dexie {
 
   constructor() {
     super('MSTDatabase');
-    // Fix: Cast `this` to `Dexie` to resolve a TypeScript error where the `version` method was not being found on the subclass type.
     const dbInstance = this as Dexie;
 
     dbInstance.version(1).stores({
@@ -26,10 +26,8 @@ export class MSTDatabase extends Dexie {
       records: '++id, workerId, projectId, startTime',
     });
     
-    // Bump version to handle the new optional `planFile` property on Project.
-    // No data migration is needed as it's a new, unindexed property.
     dbInstance.version(2).stores({
-        projects: '++id, name, client, status', // Schema for indexed fields remains the same
+        projects: '++id, name, client, status',
     });
     
     dbInstance.version(3).stores({
@@ -37,19 +35,16 @@ export class MSTDatabase extends Dexie {
       planWorkers: '++id, projectId, workerId',
     });
 
-    // Bump version to remove the 'position' property from Worker.
-    // Data migration will remove the 'position' property from existing workers.
     dbInstance.version(4).stores({
-        workers: '++id, name', // remove position index
+        workers: '++id, name',
     }).upgrade(tx => {
         return tx.table('workers').toCollection().modify(worker => {
             delete (worker as any).position;
         });
     });
 
-    // Bump version to remove client, startDate, and endDate from Project.
     dbInstance.version(5).stores({
-        projects: '++id, name, status', // remove client index
+        projects: '++id, name, status',
     }).upgrade(tx => {
         return tx.table('projects').toCollection().modify(project => {
             delete (project as any).client;
@@ -58,12 +53,10 @@ export class MSTDatabase extends Dexie {
         });
     });
 
-    // Bump version to add planMarkers table.
     dbInstance.version(6).stores({
         planMarkers: '++id, projectId, workerId, page',
     });
 
-    // Version 7: Replaces planTasks/planWorkers with a more structured solar table system.
     dbInstance.version(7).stores({
         workers: '++id, name',
         projects: '++id, name, status',
@@ -73,39 +66,31 @@ export class MSTDatabase extends Dexie {
         tableAssignments: '++id, &[tableId+workerId], tableId',
     });
     
-    // Version 8: Adds tables for attendance tracking.
     dbInstance.version(8).stores({
-        attendanceSessions: '++id, workerId', // For active clock-ins
-        dailyLogs: '++id, &[date+workerId], date', // For daily attendance status and notes
+        attendanceSessions: '++id, workerId',
+        dailyLogs: '++id, &[date+workerId], date',
     });
 
-    // Version 9: Adds table for project-specific tasks.
     dbInstance.version(9).stores({
       projectTasks: '++id, projectId',
     });
 
-    // Version 10: Adds aiPlanFile property to projects for AI-redrawn plans.
-    // No migration needed as it's a new, unindexed property.
     dbInstance.version(10).stores({
         projects: '++id, name, status',
     });
 
-    // Version 11: Adds projectComponents table for legend analysis results.
     dbInstance.version(11).stores({
       projectComponents: '++id, projectId',
     });
 
-    // Version 12: Add table for plan drawing annotations.
     dbInstance.version(12).stores({
       planAnnotations: '++id, &[projectId+page]',
     });
 
-    // Version 13: Add table for solar table status history.
     dbInstance.version(13).stores({
       tableStatusHistory: '++id, tableId, timestamp',
     });
 
-    // Version 14: Update projectTasks for task-based pay.
     dbInstance.version(14).stores({
       projectTasks: '++id, projectId, assignedWorkerId',
     }).upgrade(tx => {
@@ -117,7 +102,6 @@ export class MSTDatabase extends Dexie {
         });
     });
 
-    // Version 15: Update projectTasks for categorized task-based pay.
     dbInstance.version(15).stores({
       projectTasks: '++id, projectId, assignedWorkerId',
     }).upgrade(tx => {
@@ -128,10 +112,14 @@ export class MSTDatabase extends Dexie {
             task.tableSize = undefined;
         });
     });
+
+    // Version 16: Fix missing indexes for queries used in the app
+    dbInstance.version(16).stores({
+        solarTables: '++id, projectId, tableCode, status, [projectId+tableCode], [projectId+status]',
+        tableStatusHistory: '++id, tableId, workerId, status, timestamp',
+        projectTasks: '++id, projectId, assignedWorkerId, completionDate',
+    });
   }
 }
 
-// Fix: The MSTDatabase subclass doesn't correctly inherit Dexie's method types.
-// This cast ensures that the exported `db` object has the correct type,
-// including methods like `transaction`, resolving downstream type errors.
 export const db = new MSTDatabase() as MSTDatabase & Dexie;
