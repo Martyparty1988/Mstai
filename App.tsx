@@ -3,6 +3,7 @@ import React, { useState, Suspense } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './contexts/AuthContext';
 import { BackupProvider } from './contexts/BackupContext';
+import { ToastProvider } from './contexts/ToastContext';
 import Layout from './components/Layout';
 import SplashScreen from './components/SplashScreen';
 import Login from './components/Login';
@@ -57,30 +58,32 @@ const App: React.FC = () => {
   }
 
   return (
-    <BackupProvider>
-        <HashRouter>
-        <Layout>
-            <Suspense fallback={<PageLoader />}>
-            <Routes>
-                <Route path="/" element={<Dashboard />} />
-                <Route path="/workers" element={<Workers />} />
-                <Route path="/projects" element={<Projects />} />
-                <Route path="/statistics" element={<Statistics />} />
-                <Route path="/records" element={<TimeRecords />} />
-                <Route path="/plan" element={<Plan />} />
-                <Route path="/reports" element={<Reports />} />
-                <Route path="/attendance" element={<Attendance />} />
-                <Route path="/settings" element={<Settings />} />
-                <Route path="/import" element={<DataImporter />} />
-                <Route path="/finder" element={<ProjectFinder />} />
-                <Route path="/analyzer" element={<ImageAnalyzer />} />
-                <Route path="/generator" element={<ImageGenerator />} />
-                <Route path="*" element={<Navigate to="/" />} />
-            </Routes>
-            </Suspense>
-        </Layout>
-        </HashRouter>
-    </BackupProvider>
+    <ToastProvider>
+      <BackupProvider>
+          <HashRouter>
+          <Layout>
+              <Suspense fallback={<PageLoader />}>
+              <Routes>
+                  <Route path="/" element={<Dashboard />} />
+                  <Route path="/workers" element={<Workers />} />
+                  <Route path="/projects" element={<Projects />} />
+                  <Route path="/statistics" element={<Statistics />} />
+                  <Route path="/records" element={<TimeRecords />} />
+                  <Route path="/plan" element={<Plan />} />
+                  <Route path="/reports" element={<Reports />} />
+                  <Route path="/attendance" element={<Attendance />} />
+                  <Route path="/settings" element={<Settings />} />
+                  <Route path="/import" element={<DataImporter />} />
+                  <Route path="/finder" element={<ProjectFinder />} />
+                  <Route path="/analyzer" element={<ImageAnalyzer />} />
+                  <Route path="/generator" element={<ImageGenerator />} />
+                  <Route path="*" element={<Navigate to="/" />} />
+              </Routes>
+              </Suspense>
+          </Layout>
+          </HashRouter>
+      </BackupProvider>
+    </ToastProvider>
   );
 };
 

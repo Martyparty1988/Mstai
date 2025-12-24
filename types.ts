@@ -143,3 +143,19 @@ export interface Backup {
   data: string; // LZ-compressed JSON string
   metadata: BackupMetadata;
 }
+
+export type ToastType = 'success' | 'error' | 'info' | 'warning';
+
+export interface ToastMessage {
+  id: string;
+  type: ToastType;
+  message: string;
+  duration?: number;
+}
+
+export interface PromptTemplate {
+  id: string;
+  title: string;
+  text: string;
+  icon?: string;
+}
