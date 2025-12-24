@@ -123,3 +123,23 @@ export interface TableStatusHistory {
   status: 'pending' | 'completed';
   timestamp: Date;
 }
+
+export interface BackupMetadata {
+  appVersion: string;
+  itemsCount: {
+    workers: number;
+    projects: number;
+    records: number;
+  };
+  dataSize: number;
+}
+
+export interface Backup {
+  id?: number;
+  version: string;
+  timestamp: Date;
+  type: 'auto' | 'manual';
+  name?: string;
+  data: string; // LZ-compressed JSON string
+  metadata: BackupMetadata;
+}

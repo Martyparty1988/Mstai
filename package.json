@@ -17,7 +17,8 @@
     "dexie-react-hooks": "^4.2.0",
     "@google/genai": "^0.15.0",
     "xlsx": "^0.18.5",
-    "papaparse": "^5.4.1"
+    "papaparse": "^5.4.1",
+    "lz-string": "1.5.0"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

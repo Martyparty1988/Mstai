@@ -8,7 +8,7 @@ import UploadIcon from './icons/UploadIcon';
 import TrashIcon from './icons/TrashIcon';
 import ConfirmationModal from './ConfirmationModal';
 import BrainIcon from './icons/BrainIcon';
-import CheckCircleIcon from './icons/CheckCircleIcon';
+import BackupManager from './BackupManager';
 
 const Settings: React.FC = () => {
   const { t, language, setLanguage } = useI18n();
@@ -31,7 +31,6 @@ const Settings: React.FC = () => {
     if (window.aistudio?.openSelectKey) {
       try {
         await window.aistudio.openSelectKey();
-        // Per guidelines, assume success after triggering openSelectKey
         setHasApiKey(true);
       } catch (error) {
         console.error("Failed to open key selection:", error);
@@ -39,92 +38,6 @@ const Settings: React.FC = () => {
     } else {
       alert("AI Studio key management is not available in this environment.");
     }
-  };
-
-  const handleExport = async () => {
-    try {
-      const allData: any = {};
-      const tableNames = [
-        'workers', 'projects', 'records', 'planMarkers', 'solarTables', 
-        'tableAssignments', 'attendanceSessions', 'dailyLogs', 
-        'projectTasks', 'projectComponents', 'planAnnotations', 'tableStatusHistory'
-      ];
-      
-      for (const name of tableNames) {
-          const table = (db as any)[name];
-          if (table) {
-            allData[name] = await table.toArray();
-          }
-      }
-      
-      // Clean up sensitive/binary data for backup
-      if (allData.projects) {
-          allData.projects = allData.projects.map((p: any) => ({ ...p, planFile: null, aiPlanFile: null }));
-      }
-
-      const backupData = {
-        ...allData,
-        exportedAt: new Date().toISOString(),
-        version: "2.0"
-      };
-      
-      const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `mst_full_backup_${new Date().toISOString().split('T')[0]}.json`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    } catch (error) {
-      console.error('Backup failed:', error);
-      alert('Backup failed!');
-    }
-  };
-
-  const handleImport = () => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = '.json';
-    input.onchange = async (e) => {
-      const file = (e.target as HTMLInputElement).files?.[0];
-      if (!file) return;
-
-      if (!window.confirm(t('seed_data_confirm'))) return;
-
-      const reader = new FileReader();
-      reader.onload = async (event) => {
-        try {
-          const data = JSON.parse(event.target?.result as string);
-          const tableNames = Object.keys(data);
-          
-          await db.transaction('rw', db.tables, async () => {
-              for (const name of tableNames) {
-                  const table = (db as any)[name];
-                  if (table && data[name]) {
-                      await table.clear();
-                      const items = data[name].map((item: any) => {
-                          const newItem = { ...item };
-                          ['createdAt', 'startTime', 'endTime', 'timestamp', 'completionDate'].forEach(f => {
-                              if (newItem[f]) newItem[f] = new Date(newItem[f]);
-                          });
-                          return newItem;
-                      });
-                      await table.bulkAdd(items);
-                  }
-              }
-          });
-          alert(t('data_imported'));
-          window.location.reload();
-        } catch (error) {
-          console.error('Import failed:', error);
-          alert(t('import_error'));
-        }
-      };
-      reader.readAsText(file);
-    };
-    input.click();
   };
 
   const handleClearAll = async () => {
@@ -141,6 +54,13 @@ const Settings: React.FC = () => {
       </h1>
       
       <div className="space-y-8 max-w-5xl">
+        
+        {/* Backup Section */}
+        <section className="p-8 bg-slate-900/40 backdrop-blur-3xl rounded-3xl border border-white/10 shadow-2xl">
+            <h2 className="text-3xl font-black mb-8 text-white uppercase tracking-widest">{t('backup_restore')}</h2>
+            <BackupManager />
+        </section>
+
         {/* AI Configuration Section */}
         <section className="p-8 bg-slate-900/40 backdrop-blur-3xl rounded-3xl border border-white/10 shadow-2xl">
           <h2 className="text-3xl font-black mb-4 text-white uppercase tracking-widest flex items-center gap-3">
@@ -224,25 +144,11 @@ const Settings: React.FC = () => {
           <h2 className="text-3xl font-black mb-8 text-white uppercase tracking-widest">{t('data_management')}</h2>
           <div className="flex flex-wrap gap-4">
             <button 
-              onClick={handleExport}
-              className="flex-1 min-w-[200px] px-8 py-4 bg-blue-600 text-white font-black rounded-2xl hover:bg-blue-500 transition-all shadow-lg text-lg uppercase tracking-tighter flex items-center justify-center gap-3"
-            >
-              <UploadIcon className="w-6 h-6 rotate-180" />
-              {t('export_all_data')}
-            </button>
-            <button 
-              onClick={handleImport}
-              className="flex-1 min-w-[200px] px-8 py-4 bg-emerald-600 text-white font-black rounded-2xl hover:bg-emerald-500 transition-all shadow-lg text-lg uppercase tracking-tighter flex items-center justify-center gap-3"
-            >
-              <UploadIcon className="w-6 h-6" />
-              {t('import_data')}
-            </button>
-            <button 
               onClick={() => setIsResetting(true)}
               className="flex-1 min-w-[200px] px-8 py-4 bg-red-600/20 text-red-400 border-2 border-red-500/50 font-black rounded-2xl hover:bg-red-600 hover:text-white transition-all shadow-lg text-lg uppercase tracking-tighter flex items-center justify-center gap-3"
             >
               <TrashIcon className="w-6 h-6" />
-              Reset App
+              {t('reset_app_title')}
             </button>
           </div>
         </section>

@@ -1,6 +1,6 @@
 
 import Dexie, { type Table } from 'dexie';
-import type { Worker, Project, TimeRecord, PlanMarker, SolarTable, TableAssignment, AttendanceSession, DailyLog, ProjectTask, ProjectComponent, PlanAnnotation, TableStatusHistory } from '../types';
+import type { Worker, Project, TimeRecord, PlanMarker, SolarTable, TableAssignment, AttendanceSession, DailyLog, ProjectTask, ProjectComponent, PlanAnnotation, TableStatusHistory, Backup } from '../types';
 
 export class MSTDatabase extends Dexie {
   workers!: Table<Worker>;
@@ -15,6 +15,7 @@ export class MSTDatabase extends Dexie {
   projectComponents!: Table<ProjectComponent>;
   planAnnotations!: Table<PlanAnnotation>;
   tableStatusHistory!: Table<TableStatusHistory>;
+  backups!: Table<Backup>;
 
   constructor() {
     super('MSTDatabase');
@@ -118,6 +119,11 @@ export class MSTDatabase extends Dexie {
         solarTables: '++id, projectId, tableCode, status, [projectId+tableCode], [projectId+status]',
         tableStatusHistory: '++id, tableId, workerId, status, timestamp',
         projectTasks: '++id, projectId, assignedWorkerId, completionDate',
+    });
+
+    // Version 17: Add backups table
+    dbInstance.version(17).stores({
+        backups: '++id, type, timestamp',
     });
   }
 }
