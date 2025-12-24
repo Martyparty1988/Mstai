@@ -51,47 +51,41 @@ const ProjectCard: React.FC<{
 
     const getStatusColor = (status: string) => {
         switch (status) {
-            case 'active': return 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20';
-            case 'completed': return 'text-indigo-400 bg-indigo-400/10 border-indigo-400/20';
-            case 'on_hold': return 'text-amber-400 bg-amber-400/10 border-amber-400/20';
-            default: return 'text-slate-400 bg-slate-400/10 border-slate-400/20';
+            case 'active': return 'bg-emerald-400';
+            case 'completed': return 'bg-indigo-400';
+            case 'on_hold': return 'bg-amber-400';
+            default: return 'bg-slate-400';
         }
     };
 
     return (
         <div 
-            className="group relative flex flex-col overflow-hidden rounded-[2rem] border border-white/10 bg-slate-950/60 backdrop-blur-3xl shadow-2xl transition-all duration-500 hover:-translate-y-1 hover:shadow-[0_20px_40px_-12px_rgba(0,0,0,0.5)] animate-list-item"
+            className="group relative flex flex-col overflow-hidden rounded-[2.5rem] border border-white/10 bg-gray-900/40 backdrop-blur-3xl shadow-2xl transition-all duration-500 hover:-translate-y-2 hover:shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)] animate-list-item"
             style={{ animationDelay: `${index * 0.05}s` }}
         >
-            {/* Ambient Glow */}
-            <div className="absolute -right-20 -top-20 h-64 w-64 rounded-full bg-[var(--color-primary)] opacity-[0.08] blur-[60px] transition-all duration-700 group-hover:opacity-[0.15]"></div>
+            {/* iOS-style blurry gradient blob in background */}
+            <div className="absolute -right-24 -top-24 h-72 w-72 rounded-full bg-[var(--color-primary)] opacity-10 blur-[80px] transition-all duration-700 group-hover:opacity-20 group-hover:scale-110"></div>
             
             {/* Card Content */}
-            <div className="relative z-10 flex flex-col h-full">
-                
-                {/* Header Section */}
-                <div className="p-6 pb-2 flex justify-between items-start gap-4">
-                    <div className="space-y-1 overflow-hidden">
-                        <div className={`inline-flex items-center px-2.5 py-1 rounded-full border text-[10px] font-black uppercase tracking-widest ${getStatusColor(project.status)}`}>
-                            <span className="w-1.5 h-1.5 rounded-full bg-current mr-2 animate-pulse"></span>
-                            {t(project.status as any)}
-                        </div>
-                        <h3 className="text-2xl font-black text-white tracking-tight truncate leading-tight group-hover:text-[var(--color-accent)] transition-colors">
-                            {project.name}
-                        </h3>
+            <div className="relative z-10 flex flex-col h-full p-8">
+                {/* Header */}
+                <div className="flex items-center justify-between mb-6">
+                    <div className={`px-4 py-2 rounded-full border border-white/10 bg-white/5 backdrop-blur-md flex items-center gap-2.5 shadow-inner`}>
+                        <div className={`h-2.5 w-2.5 rounded-full shadow-[0_0_10px_currentColor] ${getStatusColor(project.status)} animate-pulse`}></div>
+                        <span className="text-[10px] font-black uppercase tracking-widest text-white/90">{t(project.status as any)}</span>
                     </div>
-                    {/* Utility Actions (Top Right) */}
-                    <div className="flex gap-2 shrink-0">
+                    
+                    <div className="flex gap-2 opacity-0 transition-opacity duration-300 group-hover:opacity-100">
                         <button 
                             onClick={(e) => {e.stopPropagation(); onEdit(project)}} 
-                            className="p-2.5 rounded-xl bg-white/5 text-gray-400 hover:text-white hover:bg-white/10 transition-all active:scale-95 border border-white/5"
+                            className="flex h-10 w-10 items-center justify-center rounded-full bg-white/5 text-white hover:bg-white/20 backdrop-blur-md transition-all active:scale-95 border border-white/5"
                             title={t('edit_project')}
                         >
                             <PencilIcon className="h-4 w-4" />
                         </button>
                         <button 
                             onClick={(e) => {e.stopPropagation(); onDelete(project)}} 
-                            className="p-2.5 rounded-xl bg-rose-500/5 text-rose-400 hover:bg-rose-500/20 transition-all active:scale-95 border border-rose-500/10"
+                            className="flex h-10 w-10 items-center justify-center rounded-full bg-rose-500/10 text-rose-300 hover:bg-rose-500/30 backdrop-blur-md transition-all active:scale-95 border border-rose-500/10"
                             title={t('delete')}
                         >
                             <TrashIcon className="h-4 w-4" />
@@ -99,74 +93,68 @@ const ProjectCard: React.FC<{
                     </div>
                 </div>
 
-                {/* Description */}
-                <div className="px-6 mb-6">
-                    <p className="text-sm font-medium text-slate-400 line-clamp-2 min-h-[2.5em] leading-relaxed">
+                {/* Title & Desc */}
+                <div className="mb-8">
+                    <h3 className="mb-3 text-3xl font-black tracking-tight text-white drop-shadow-sm group-hover:text-[var(--color-accent)] transition-colors line-clamp-1">{project.name}</h3>
+                    <p className="line-clamp-2 text-sm font-medium leading-relaxed text-blue-100/60 min-h-[2.5em]">
                         {project.description || t('no_data')}
                     </p>
                 </div>
 
-                {/* Data Zone (Darker Background) */}
-                <div className="px-4 pb-4 mt-auto">
-                    <div className="bg-black/30 rounded-2xl p-4 border border-white/5 space-y-5">
-                        
-                        {/* Tables Progress */}
-                        <div className="space-y-2">
-                            <div className="flex justify-between items-end">
-                                <div className="flex items-center gap-2 text-cyan-300">
-                                    <MapIcon className="w-4 h-4" />
-                                    <span className="text-[10px] font-bold uppercase tracking-widest opacity-80">{t('tables')}</span>
-                                </div>
-                                <span className="font-mono text-xs font-bold text-white">{completedTablesCount}<span className="text-slate-500">/{totalTablesCount}</span></span>
-                            </div>
-                            <div className="h-2 w-full bg-slate-800/50 rounded-full overflow-hidden">
-                                <div className="h-full bg-gradient-to-r from-cyan-600 to-cyan-400 transition-all duration-1000 ease-out" style={{ width: `${tablesProgress}%` }}></div>
-                            </div>
+                {/* Progress Sliders - iOS Control Center Style */}
+                <div className="mt-auto space-y-6">
+                    {/* Tables Slider */}
+                    <div>
+                        <div className="mb-2 flex items-end justify-between px-1">
+                            <span className="text-[10px] font-bold uppercase tracking-widest text-blue-200/50">{t('tables')}</span>
+                            <span className="font-mono text-xs font-bold text-blue-200">{completedTablesCount}<span className="opacity-50">/{totalTablesCount}</span></span>
                         </div>
-
-                        {/* Tasks Progress */}
-                        <div className="space-y-2">
-                            <div className="flex justify-between items-end">
-                                <div className="flex items-center gap-2 text-violet-300">
-                                    <CheckCircleIcon className="w-4 h-4" />
-                                    <span className="text-[10px] font-bold uppercase tracking-widest opacity-80">{t('tasks')}</span>
-                                </div>
-                                <span className="font-mono text-xs font-bold text-white">{completedTasksCount}<span className="text-slate-500">/{totalTasksCount}</span></span>
-                            </div>
-                            <div className="h-2 w-full bg-slate-800/50 rounded-full overflow-hidden">
-                                <div className="h-full bg-gradient-to-r from-violet-600 to-violet-400 transition-all duration-1000 ease-out" style={{ width: `${tasksProgress}%` }}></div>
-                            </div>
+                        <div className="relative h-3 w-full overflow-hidden rounded-full bg-black/30 shadow-[inset_0_1px_2px_rgba(0,0,0,0.5)] border border-white/5">
+                            <div className="absolute left-0 top-0 h-full rounded-full bg-gradient-to-r from-cyan-500 to-blue-500 shadow-[0_0_15px_rgba(56,189,248,0.4)] transition-all duration-1000" style={{ width: `${tablesProgress}%` }}></div>
+                        </div>
+                    </div>
+                    
+                    {/* Tasks Slider */}
+                    <div>
+                        <div className="mb-2 flex items-end justify-between px-1">
+                            <span className="text-[10px] font-bold uppercase tracking-widest text-blue-200/50">{t('tasks')}</span>
+                            <span className="font-mono text-xs font-bold text-blue-200">{completedTasksCount}<span className="opacity-50">/{totalTasksCount}</span></span>
+                        </div>
+                        <div className="relative h-3 w-full overflow-hidden rounded-full bg-black/30 shadow-[inset_0_1px_2px_rgba(0,0,0,0.5)] border border-white/5">
+                            <div className="absolute left-0 top-0 h-full rounded-full bg-gradient-to-r from-violet-500 to-fuchsia-500 shadow-[0_0_15px_rgba(192,132,252,0.4)] transition-all duration-1000" style={{ width: `${tasksProgress}%` }}></div>
                         </div>
                     </div>
                 </div>
 
-                {/* Action Toolbar */}
-                <div className="p-4 pt-0 grid grid-cols-2 gap-3">
+                {/* Action Grid - Glass Tiles */}
+                <div className="mt-8 grid grid-cols-2 gap-4">
                     <button 
                         onClick={() => onManageTasks(project)}
-                        className="flex items-center justify-center gap-2 py-4 rounded-xl bg-white/5 hover:bg-white/10 text-white font-bold text-xs uppercase tracking-wider transition-all active:scale-95 border border-white/10 shadow-lg group/btn"
+                        className="group/btn relative flex flex-col items-center justify-center gap-2 overflow-hidden rounded-2xl bg-white/5 py-5 backdrop-blur-md transition-all hover:bg-white/10 active:scale-95 border border-white/5 shadow-lg"
                     >
-                        <ClockIcon className="w-5 h-5 text-indigo-300 group-hover/btn:scale-110 transition-transform" />
-                        {t('tasks')}
+                        <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/10 to-transparent opacity-0 group-hover/btn:opacity-100 transition-opacity"></div>
+                        <ClockIcon className="h-6 w-6 text-indigo-300 transition-transform duration-300 group-hover/btn:scale-110 group-hover/btn:text-white" />
+                        <span className="text-[10px] font-black uppercase tracking-widest text-white/70">{t('tasks')}</span>
                     </button>
 
                     <button 
                         onClick={() => project.planFile ? onViewPlan(project) : null}
                         disabled={!project.planFile}
-                        className={`flex items-center justify-center gap-2 py-4 rounded-xl font-bold text-xs uppercase tracking-wider transition-all active:scale-95 border shadow-lg group/btn ${project.planFile ? 'bg-blue-600/20 hover:bg-blue-600/30 text-blue-200 border-blue-500/30' : 'bg-black/20 text-gray-600 border-white/5 cursor-not-allowed'}`}
+                        className={`group/btn relative flex flex-col items-center justify-center gap-2 overflow-hidden rounded-2xl py-5 backdrop-blur-md transition-all border border-white/5 shadow-lg ${project.planFile ? 'bg-blue-600/10 hover:bg-blue-600/20 active:scale-95' : 'bg-black/20 opacity-40 cursor-not-allowed'}`}
                     >
-                        <MapIcon className={`w-5 h-5 group-hover/btn:scale-110 transition-transform ${project.planFile ? 'text-blue-400' : 'text-gray-600'}`} />
-                        {t('plan')}
+                        <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-transparent opacity-0 group-hover/btn:opacity-100 transition-opacity"></div>
+                        <MapIcon className={`h-6 w-6 transition-transform duration-300 ${project.planFile ? 'text-blue-300 group-hover/btn:scale-110 group-hover/btn:text-white' : 'text-gray-500'}`} />
+                        <span className="text-[10px] font-black uppercase tracking-widest text-white/70">{t('plan')}</span>
                     </button>
                 </div>
             </div>
             
-            {/* Last Activity Strip */}
+            {/* Last Activity Footer */}
             {lastActivity && (
-                <div className="bg-white/5 border-t border-white/5 px-6 py-2">
-                    <div className="flex items-center gap-2 text-[9px] font-bold uppercase tracking-widest text-white/40 truncate">
-                        <div className="h-1 w-1 rounded-full bg-green-500"></div>
-                        <span>{t('last_activity')}: {new Date(lastActivity.timestamp).toLocaleString()}</span>
+                <div className="bg-black/20 px-8 py-3 backdrop-blur-sm border-t border-white/5">
+                    <div className="flex items-center gap-2 text-[9px] font-bold uppercase tracking-widest text-white/30">
+                        <div className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse"></div>
+                        <span>{t('last_activity')}: {new Date(lastActivity.timestamp).toLocaleDateString()}</span>
                     </div>
                 </div>
             )}
