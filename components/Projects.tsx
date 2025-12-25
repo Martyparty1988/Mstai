@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { Link } from 'react-router-dom';
@@ -228,7 +227,7 @@ const Projects: React.FC = () => {
 
   const handleDelete = async () => {
     if (projectToDelete?.id) {
-      await db.transaction('rw', db.projects, db.projectTasks, db.solarTables, db.tableAssignments, db.tableStatusHistory, async () => {
+      await db.transaction('rw', [db.projects, db.projectTasks, db.solarTables, db.tableAssignments, db.tableStatusHistory], async () => {
         await db.projectTasks.where('projectId').equals(projectToDelete.id!).delete();
         await db.solarTables.where('projectId').equals(projectToDelete.id!).delete();
         await db.projects.delete(projectToDelete.id!);

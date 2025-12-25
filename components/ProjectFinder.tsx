@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { GoogleGenAI } from '@google/genai';
 import { useLiveQuery } from 'dexie-react-hooks';
@@ -74,7 +73,7 @@ const ProjectFinder: React.FC = () => {
             
             // 1. Prepare Full App Data Context
             const appData = {
-                projects: projects?.map(({ planFile, aiPlanFile, ...p }) => p) || [],
+                projects: projects?.map(({ planFile, ...p }) => p) || [],
                 workers: workers || [],
                 tables: solarTables?.map(({x, y, ...t}) => t) || [],
                 assignments: tableAssignments || [],

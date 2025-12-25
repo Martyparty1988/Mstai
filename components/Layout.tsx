@@ -18,32 +18,31 @@ const BottomNavBar: React.FC = () => {
     const { user } = useAuth();
     
     const navItems = [
-        { to: "/", title: t('dashboard'), icon: <DashboardIcon className="w-6 h-6 mb-1" />, roles: ['admin', 'user'] },
-        { to: "/workers", title: t('workers'), icon: <WorkersIcon className="w-6 h-6 mb-1" />, roles: ['admin'] },
-        { to: "/projects", title: t('projects'), icon: <ProjectsIcon className="w-6 h-6 mb-1" />, roles: ['admin', 'user'] },
-        { to: "/records", title: t('work_log'), icon: <ClockIcon className="w-6 h-6 mb-1" />, roles: ['admin', 'user'] },
-        { to: "/settings", title: t('settings'), icon: <SettingsIcon className="w-6 h-6 mb-1" />, roles: ['admin'] },
+        { to: "/", title: t('dashboard'), icon: <DashboardIcon className="w-5 h-5" />, roles: ['admin', 'user'] },
+        { to: "/workers", title: t('workers'), icon: <WorkersIcon className="w-5 h-5" />, roles: ['admin'] },
+        { to: "/projects", title: t('projects'), icon: <ProjectsIcon className="w-5 h-5" />, roles: ['admin', 'user'] },
+        { to: "/records", title: t('work_log'), icon: <ClockIcon className="w-5 h-5" />, roles: ['admin', 'user'] },
+        { to: "/settings", title: t('settings'), icon: <SettingsIcon className="w-5 h-5" />, roles: ['admin'] },
     ];
 
     const visibleItems = navItems.filter(item => item.roles.includes(user?.role || 'user'));
 
     return (
-        <nav className="md:hidden bottom-nav glass-card border-t border-white/20 rounded-t-[2.5rem] shadow-[0_-20px_50px_rgba(0,0,0,0.8)]">
-            <div className="flex justify-around items-center h-24 px-2">
+        <nav className="md:hidden bottom-nav">
+            <div className="glass-card rounded-[2rem] px-2 py-3 flex justify-around items-center shadow-[0_8px_32px_rgba(0,0,0,0.3)] bg-slate-900/80 backdrop-blur-xl border border-white/10">
                 {visibleItems.map(item => (
                     <NavLink
                         key={item.to}
                         to={item.to}
                         className={({ isActive }) =>
-                            `bottom-nav-link relative px-4 transition-all duration-300 ${isActive ? 'text-[var(--color-accent)] scale-110' : 'text-slate-400 hover:text-white'}`
+                            `relative p-3 rounded-2xl transition-all duration-300 ${isActive ? 'bg-white/10 text-[var(--color-accent)]' : 'text-slate-400 hover:text-white'}`
                         }
                     >
                         {({ isActive }) => (
-                            <div className="flex flex-col items-center">
+                            <div className="flex flex-col items-center justify-center">
                                 {item.icon}
-                                <span className="text-[10px] font-black uppercase tracking-[0.15em] drop-shadow-md">{item.title}</span>
                                 {isActive && (
-                                    <span className="absolute -top-3 left-1/2 -translate-x-1/2 w-2 h-2 bg-[var(--color-accent)] rounded-full shadow-[0_0_15px_var(--color-accent)]"></span>
+                                    <span className="absolute bottom-1 w-1 h-1 bg-[var(--color-accent)] rounded-full"></span>
                                 )}
                             </div>
                         )}
@@ -62,36 +61,37 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
   return (
     <div className="fixed inset-0 w-full h-[100dvh] flex flex-col bg-transparent overflow-hidden">
-      {/* Header - Fixed height, no shrink, no overflow */}
-      <header className={`flex justify-between items-center h-24 px-6 md:px-10 bg-slate-950/80 backdrop-blur-3xl border-b border-white/15 header-safe-area shrink-0 z-50 w-full ${user?.role === 'admin' ? 'border-b-4 border-b-[var(--color-primary)] shadow-[0_10px_30px_rgba(99,102,241,0.2)]' : ''}`}>
-         <div className="flex items-center gap-8 min-w-0">
-             <Link to="/" className="text-4xl md:text-5xl font-black italic tracking-tighter text-white hover:scale-105 transition-transform active:scale-95 drop-shadow-2xl truncate">
-                MST<span className="text-[var(--color-accent)]">.</span>
+      {/* Header - Transparent, Blurred, Minimal */}
+      <header className={`flex justify-between items-center h-20 px-6 md:px-10 shrink-0 z-50 w-full header-safe-area transition-all duration-300`}>
+         <div className="flex items-center gap-6 min-w-0">
+             <Link to="/" className="text-2xl md:text-3xl font-bold tracking-tighter text-white hover:opacity-80 transition-opacity flex items-center gap-1">
+                MST<span className="text-[var(--color-accent)] text-4xl leading-none">.</span>
               </Link>
               <div className="hidden sm:block">
                 <ConnectionStatusIndicator />
               </div>
          </div>
-        <div className="flex items-center space-x-3 md:space-x-8 shrink-0">
-          <button onClick={toggleTheme} className="text-slate-200 hover:text-white transition-all p-3 rounded-2xl hover:bg-white/10 active:scale-90 shadow-inner">
-            {colorTheme === 'light' ? <SunIcon className="w-7 h-7" /> : <MoonIcon className="w-7 h-7" />}
+        
+        <div className="flex items-center gap-4 shrink-0">
+          <button onClick={toggleTheme} className="text-slate-400 hover:text-white transition-all p-2 rounded-full hover:bg-white/5 active:scale-95">
+            {colorTheme === 'light' ? <SunIcon className="w-5 h-5" /> : <MoonIcon className="w-5 h-5" />}
           </button>
           
           <div className="relative group">
             <select
                 value={language}
                 onChange={e => setLanguage(e.target.value as 'en' | 'cs')}
-                className="bg-slate-900 text-white border-2 border-white/10 focus:ring-0 font-black text-sm px-5 py-2.5 cursor-pointer appearance-none rounded-xl uppercase tracking-widest hover:bg-slate-800 transition-colors shadow-xl"
+                className="bg-transparent text-slate-300 border border-white/10 focus:ring-1 focus:ring-[var(--color-accent)] font-medium text-xs px-3 py-1.5 cursor-pointer rounded-lg uppercase tracking-wide hover:bg-white/5 transition-colors"
             >
-                <option value="cs" className="bg-slate-900 text-white font-bold">CS</option>
-                <option value="en" className="bg-slate-900 text-white font-bold">EN</option>
+                <option value="cs" className="bg-slate-900">CS</option>
+                <option value="en" className="bg-slate-900">EN</option>
             </select>
           </div>
 
            {user && (
               <button
                   onClick={logout}
-                  className="hidden sm:block px-6 py-3 text-xs font-black uppercase tracking-widest text-white rounded-xl bg-rose-600/10 hover:bg-rose-600 hover:text-white border-2 border-rose-600/30 transition-all active:scale-95 shadow-2xl"
+                  className="hidden sm:block px-5 py-2 text-xs font-bold uppercase tracking-widest text-white/70 hover:text-white rounded-lg bg-white/5 hover:bg-red-500/80 border border-white/5 hover:border-red-500/50 transition-all active:scale-95"
               >
                   {t('logout')}
               </button>
@@ -99,12 +99,12 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         </div>
       </header>
       
-      {/* Main content - Scrollable area - explicitly allow touch scrolling here */}
+      {/* Main content - refined padding and behavior */}
+      {/* Added 'scroll-y' class which is whitelisted in index.html for touch events */}
       <main 
-        className="flex-1 overflow-y-auto overflow-x-hidden main-safe-area relative custom-scrollbar px-4 md:px-12 py-6 md:py-10 overscroll-contain w-full"
-        style={{ touchAction: 'pan-y' }}
+        className="flex-1 overflow-y-auto overflow-x-hidden main-safe-area relative custom-scrollbar px-4 md:px-12 pt-2 pb-24 overscroll-contain w-full scroll-y"
       >
-          <div key={location.pathname} className="max-w-7xl mx-auto animate-page-enter pb-24 md:pb-0 w-full">
+          <div key={location.pathname} className="max-w-7xl mx-auto w-full animate-page-enter">
               {children}
           </div>
       </main>
