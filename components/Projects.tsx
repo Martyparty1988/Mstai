@@ -6,7 +6,7 @@ import { useI18n } from '../contexts/I18nContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import { googleSheetsService } from '../services/googleSheetsService';
-import type { Project } from '../types';
+import type { Project, SolarTable, ProjectTask } from '../types';
 import ProjectForm from './ProjectForm';
 import ChartBarIcon from './icons/ChartBarIcon';
 import PlanViewerModal from './PlanViewerModal';
@@ -19,7 +19,53 @@ import PencilIcon from './icons/PencilIcon';
 import TrashIcon from './icons/TrashIcon';
 import SearchIcon from './icons/SearchIcon';
 import WorkersIcon from './icons/WorkersIcon';
-import ShareIcon from './icons/ShareIcon'; // Using ShareIcon for sync
+import ShareIcon from './icons/ShareIcon';
+
+const ChevronDownIcon = (props: React.SVGProps<SVGSVGElement>) => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" {...props}><path d="m6 9 6 6 6-6"/></svg>
+);
+
+const TaskProgressRing: React.FC<{ percentage: number }> = ({ percentage }) => {
+    const radius = 18;
+    const circumference = 2 * Math.PI * radius;
+    const strokeDashoffset = circumference - (percentage / 100) * circumference;
+
+    return (
+        <div className="relative flex items-center justify-center w-14 h-14" title={`${percentage}% dokončeno`}>
+            <svg className="w-full h-full transform -rotate-90">
+                <circle
+                    cx="28"
+                    cy="28"
+                    r={radius}
+                    stroke="currentColor"
+                    strokeWidth="4"
+                    fill="transparent"
+                    className="text-white/5"
+                />
+                <circle
+                    cx="28"
+                    cy="28"
+                    r={radius}
+                    stroke="url(#taskGradient)"
+                    strokeWidth="4"
+                    fill="transparent"
+                    strokeDasharray={circumference}
+                    style={{ strokeDashoffset, transition: 'stroke-dashoffset 1s ease-out' }}
+                    strokeLinecap="round"
+                />
+                <defs>
+                    <linearGradient id="taskGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                        <stop offset="0%" stopColor="#8b5cf6" />
+                        <stop offset="100%" stopColor="#d946ef" />
+                    </linearGradient>
+                </defs>
+            </svg>
+            <span className="absolute inset-0 flex items-center justify-center text-[10px] font-black text-white font-mono">
+                {percentage}%
+            </span>
+        </div>
+    );
+};
 
 const ProjectCard: React.FC<{
     project: Project;
@@ -31,146 +77,208 @@ const ProjectCard: React.FC<{
     onManageTasks: (p: Project) => void;
     onSync: (p: Project) => void;
 }> = ({ project, index, isAdmin, onEdit, onDelete, onViewPlan, onManageTasks, onSync }) => {
-    const { t } = useI18n();
+    const { t, language } = useI18n();
+    const [isExpanded, setIsExpanded] = useState(false);
     
+    // Live Queries for statistics
     const tables = useLiveQuery(() => db.solarTables.where('projectId').equals(project.id!).toArray(), [project.id]);
-    const completedTablesCount = useMemo(() => tables?.filter(t => t.status === 'completed').length || 0, [tables]);
-    const totalTablesCount = useMemo(() => tables?.length || 0, [tables]);
-    const tablesProgress = useMemo(() => totalTablesCount > 0 ? Math.round((completedTablesCount / totalTablesCount) * 100) : 0, [completedTablesCount, totalTablesCount]);
-
     const tasks = useLiveQuery(() => db.projectTasks.where('projectId').equals(project.id!).toArray(), [project.id]);
-    const completedTasksCount = useMemo(() => tasks?.filter(t => t.completionDate).length || 0, [tasks]);
-    const totalTasksCount = useMemo(() => tasks?.length || 0, [tasks]);
-    const tasksProgress = useMemo(() => totalTasksCount > 0 ? Math.round((completedTasksCount / totalTasksCount) * 100) : 0, [completedTasksCount, totalTasksCount]);
 
-    // Live Activity check
-    const lastHistory = useLiveQuery(async () => {
-        if (!project.id) return null;
-        const tableIds = (await db.solarTables.where('projectId').equals(project.id).toArray()).map(t => t.id);
-        if (tableIds.length === 0) return null;
-        return db.tableStatusHistory.where('tableId').anyOf(tableIds as number[]).reverse().sortBy('timestamp');
-    }, [project.id]);
-    
-    const lastActivity = lastHistory?.[0];
+    const stats = useMemo(() => {
+        const totalTables = tables?.length || 0;
+        const completedTables = tables?.filter(t => t.status === 'completed').length || 0;
+        const tableProgress = totalTables > 0 ? Math.round((completedTables / totalTables) * 100) : 0;
+
+        const totalTasks = tasks?.length || 0;
+        const completedTasks = tasks?.filter(t => !!t.completionDate).length || 0;
+        const taskProgress = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+
+        // Breakdown for expansion
+        const breakdown = {
+            panels: tasks?.filter(t => t.taskType === 'panels').length || 0,
+            construction: tasks?.filter(t => t.taskType === 'construction').length || 0,
+            cables: tasks?.filter(t => t.taskType === 'cables').length || 0,
+        };
+
+        return { totalTables, completedTables, tableProgress, totalTasks, completedTasks, taskProgress, breakdown };
+    }, [tables, tasks]);
 
     const getStatusColor = (status: string) => {
         switch (status) {
-            case 'active': return 'bg-emerald-400';
-            case 'completed': return 'bg-indigo-400';
-            case 'on_hold': return 'bg-amber-400';
-            default: return 'bg-slate-400';
+            case 'active': return 'from-emerald-400 to-teal-500';
+            case 'completed': return 'from-indigo-400 to-blue-500';
+            case 'on_hold': return 'from-amber-400 to-orange-500';
+            default: return 'from-slate-400 to-slate-500';
         }
     };
 
     return (
         <div 
-            className="group relative flex flex-col overflow-hidden rounded-[2rem] md:rounded-[2.5rem] border border-white/10 bg-gray-900/40 backdrop-blur-3xl shadow-2xl transition-all duration-500 hover:-translate-y-2 hover:shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)] animate-list-item"
-            style={{ animationDelay: `${index * 0.05}s` }}
+            className={`group relative flex flex-col overflow-hidden rounded-[2.5rem] border border-white/10 bg-slate-900/40 backdrop-blur-3xl shadow-2xl transition-all duration-500 animate-list-item ${isExpanded ? 'ring-2 ring-[var(--color-accent)]/50 bg-slate-900/60' : 'hover:-translate-y-2 hover:shadow-[0_30px_60px_-12px_rgba(0,0,0,0.6)]'}`}
+            style={{ animationDelay: `${index * 0.07}s` }}
         >
-            {/* iOS-style blurry gradient blob in background */}
-            <div className="absolute -right-24 -top-24 h-72 w-72 rounded-full bg-[var(--color-primary)] opacity-10 blur-[80px] transition-all duration-700 group-hover:opacity-20 group-hover:scale-110"></div>
+            {/* Glossy Overlay Background */}
+            <div className="absolute inset-0 bg-gradient-to-br from-white/[0.03] to-transparent pointer-events-none"></div>
+            <div className="absolute -right-20 -top-20 h-64 w-64 rounded-full bg-[var(--color-primary)] opacity-[0.07] blur-[100px] transition-all duration-700 group-hover:opacity-15 group-hover:scale-125"></div>
             
-            {/* Card Content */}
             <div className="relative z-10 flex flex-col h-full p-6 md:p-8">
-                {/* Header */}
+                {/* Header: Status, Progress Ring & Admin Tools */}
                 <div className="flex items-center justify-between mb-6">
-                    <div className={`px-3 py-1.5 rounded-full border border-white/10 bg-white/5 backdrop-blur-md flex items-center gap-2 shadow-inner`}>
-                        <div className={`h-2 w-2 rounded-full shadow-[0_0_10px_currentColor] ${getStatusColor(project.status)} animate-pulse`}></div>
-                        <span className="text-[10px] font-black uppercase tracking-widest text-white/90">{t(project.status as any)}</span>
+                    <div className="flex items-center gap-4">
+                        <div className={`px-4 py-1.5 rounded-full border border-white/10 bg-black/30 backdrop-blur-md flex items-center gap-2.5 shadow-xl`}>
+                            <div className={`h-2 w-2 rounded-full bg-gradient-to-r ${getStatusColor(project.status)} shadow-[0_0_12px_rgba(255,255,255,0.3)] animate-pulse`}></div>
+                            <span className="text-[10px] font-black uppercase tracking-[0.15em] text-white/90">{t(project.status as any)}</span>
+                        </div>
+                        <TaskProgressRing percentage={stats.taskProgress} />
                     </div>
                     
                     {isAdmin && (
                         <div className="flex gap-2">
                             <button 
                                 onClick={(e) => {e.stopPropagation(); onSync(project)}} 
-                                className="flex h-9 w-9 items-center justify-center rounded-full bg-green-500/10 text-green-400 hover:bg-green-500/30 backdrop-blur-md transition-all active:scale-95 border border-green-500/10"
+                                className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white/5 text-emerald-400 hover:bg-emerald-500 hover:text-white backdrop-blur-md transition-all active:scale-90 border border-white/5 shadow-lg"
                                 title={t('sync_to_sheets')}
                             >
-                                <ShareIcon className="h-3.5 w-3.5" />
+                                <ShareIcon className="h-4 w-4" />
                             </button>
                             <button 
                                 onClick={(e) => {e.stopPropagation(); onEdit(project)}} 
-                                className="flex h-9 w-9 items-center justify-center rounded-full bg-white/5 text-white hover:bg-white/20 backdrop-blur-md transition-all active:scale-95 border border-white/5"
+                                className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white/5 text-blue-300 hover:bg-blue-500 hover:text-white backdrop-blur-md transition-all active:scale-90 border border-white/5 shadow-lg"
                                 title={t('edit_project')}
                             >
-                                <PencilIcon className="h-3.5 w-3.5" />
+                                <PencilIcon className="h-4 w-4" />
                             </button>
                             <button 
                                 onClick={(e) => {e.stopPropagation(); onDelete(project)}} 
-                                className="flex h-9 w-9 items-center justify-center rounded-full bg-rose-500/10 text-rose-300 hover:bg-rose-500/30 backdrop-blur-md transition-all active:scale-95 border border-rose-500/10"
-                                title={t('delete')}
+                                className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white/5 text-rose-400 hover:bg-rose-500 hover:text-white backdrop-blur-md transition-all active:scale-90 border border-white/5 shadow-lg"
+                                title={t('delete_project')}
                             >
-                                <TrashIcon className="h-3.5 w-3.5" />
+                                <TrashIcon className="h-4 w-4" />
                             </button>
                         </div>
                     )}
                 </div>
 
-                {/* Title & Desc */}
-                <div className="mb-8">
-                    <h3 className="mb-3 text-2xl md:text-3xl font-black tracking-tight text-white drop-shadow-sm group-hover:text-[var(--color-accent)] transition-colors line-clamp-1">{project.name}</h3>
-                    <p className="line-clamp-2 text-xs md:text-sm font-medium leading-relaxed text-blue-100/60 min-h-[2.5em]">
+                {/* Content: Title & Description */}
+                <div className="mb-6 cursor-pointer" onClick={() => setIsExpanded(!isExpanded)}>
+                    <div className="flex items-center justify-between mb-2.5">
+                        <h3 className="text-2xl md:text-3xl font-black tracking-tight text-white group-hover:text-[var(--color-accent)] transition-colors line-clamp-1 italic uppercase">{project.name}</h3>
+                        <ChevronDownIcon className={`w-5 h-5 text-slate-500 transition-transform duration-300 ${isExpanded ? 'rotate-180 text-[var(--color-accent)]' : ''}`} />
+                    </div>
+                    
+                    <p className={`text-sm font-medium leading-relaxed text-slate-400 transition-all duration-300 ${isExpanded ? '' : 'line-clamp-2 min-h-[3em]'}`}>
                         {project.description || t('no_data')}
                     </p>
+
+                    {isExpanded && (
+                        <div className="mt-6 space-y-4 animate-fade-in">
+                            <div className="grid grid-cols-3 gap-2">
+                                <div className="p-3 bg-white/5 rounded-2xl border border-white/5 text-center">
+                                    <div className="text-[9px] font-black text-slate-500 uppercase mb-1">{t('panels')}</div>
+                                    <div className="text-lg font-black text-white">{stats.breakdown.panels}</div>
+                                </div>
+                                <div className="p-3 bg-white/5 rounded-2xl border border-white/5 text-center">
+                                    <div className="text-[9px] font-black text-slate-500 uppercase mb-1">{t('construction')}</div>
+                                    <div className="text-lg font-black text-white">{stats.breakdown.construction}</div>
+                                </div>
+                                <div className="p-3 bg-white/5 rounded-2xl border border-white/5 text-center">
+                                    <div className="text-[9px] font-black text-slate-500 uppercase mb-1">{t('cables')}</div>
+                                    <div className="text-lg font-black text-white">{stats.breakdown.cables}</div>
+                                </div>
+                            </div>
+
+                            <div className="pt-4 border-t border-white/5 space-y-2">
+                                <div className="flex justify-between text-[10px] font-bold uppercase tracking-widest text-slate-600">
+                                    <span>{t('created_at')}</span>
+                                    <span className="text-slate-400">{project.createdAt ? new Date(project.createdAt).toLocaleDateString(language === 'cs' ? 'cs-CZ' : 'en-US') : '-'}</span>
+                                </div>
+                                <div className="flex justify-between text-[10px] font-bold uppercase tracking-widest text-slate-600">
+                                    <span>{t('updated_at')}</span>
+                                    <span className="text-slate-400">{project.updatedAt ? new Date(project.updatedAt).toLocaleDateString(language === 'cs' ? 'cs-CZ' : 'en-US') : '-'}</span>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {project.googleSpreadsheetId && !isExpanded && (
+                        <div className="flex items-center gap-2 mt-3 text-[9px] font-black uppercase tracking-[0.1em] text-slate-500 bg-white/5 w-fit px-3 py-1 rounded-full border border-white/5" title={t('last_sync')}>
+                            <ShareIcon className="h-3 w-3 opacity-50" />
+                            <span>{t('last_sync')}: {project.lastSync ? new Date(project.lastSync).toLocaleString() : t('never')}</span>
+                        </div>
+                    )}
                 </div>
 
-                {/* Progress Sliders - iOS Control Center Style */}
-                <div className="mt-auto space-y-6">
-                    {/* Tables Slider */}
-                    <div>
-                        <div className="mb-2 flex items-end justify-between px-1">
-                            <span className="text-[10px] font-bold uppercase tracking-widest text-blue-200/50">{t('tables')}</span>
-                            <span className="font-mono text-xs font-bold text-blue-200">{completedTablesCount}<span className="opacity-50">/{totalTablesCount}</span></span>
+                {/* Progress Indicators */}
+                <div className="space-y-6 mb-8">
+                    {/* Tables Progress */}
+                    <div className="space-y-2">
+                        <div className="flex items-end justify-between px-1">
+                            <span className="text-[10px] font-black uppercase tracking-widest text-slate-500" title={t('tables')}>{t('tables')}</span>
+                            <span className="font-mono text-xs font-bold text-white bg-white/5 px-2 py-0.5 rounded-lg border border-white/5">
+                                {stats.tableProgress}% <span className="text-slate-500 ml-1">({stats.completedTables}/{stats.totalTables})</span>
+                            </span>
                         </div>
-                        <div className="relative h-2.5 w-full overflow-hidden rounded-full bg-black/30 shadow-[inset_0_1px_2px_rgba(0,0,0,0.5)] border border-white/5">
-                            <div className="absolute left-0 top-0 h-full rounded-full bg-gradient-to-r from-cyan-500 to-blue-500 shadow-[0_0_15px_rgba(56,189,248,0.4)] transition-all duration-1000" style={{ width: `${tablesProgress}%` }}></div>
+                        <div className="relative h-3 w-full overflow-hidden rounded-full bg-black/40 border border-white/5 shadow-inner">
+                            <div 
+                                className="absolute left-0 top-0 h-full rounded-full bg-gradient-to-r from-cyan-600 to-blue-500 transition-all duration-1000 ease-out shadow-[0_0_15px_rgba(6,182,212,0.4)]" 
+                                style={{ width: `${stats.tableProgress}%` }}
+                            >
+                                <div className="absolute inset-0 bg-[linear-gradient(90deg,transparent_0%,rgba(255,255,255,0.2)_50%,transparent_100%)] animate-[shimmer_2s_infinite]"></div>
+                            </div>
                         </div>
                     </div>
                     
-                    {/* Tasks Slider */}
-                    <div>
-                        <div className="mb-2 flex items-end justify-between px-1">
-                            <span className="text-[10px] font-bold uppercase tracking-widest text-blue-200/50">{t('tasks')}</span>
-                            <span className="font-mono text-xs font-bold text-blue-200">{completedTasksCount}<span className="opacity-50">/{totalTasksCount}</span></span>
+                    {/* Tasks Progress */}
+                    <div className="space-y-2">
+                        <div className="flex items-end justify-between px-1">
+                            <span className="text-[10px] font-black uppercase tracking-widest text-slate-500" title={t('tasks')}>{t('tasks')}</span>
+                            <div className="flex items-center gap-2">
+                                <span className="text-[10px] font-black bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded-full border border-indigo-500/30">
+                                    {stats.taskProgress}% {t('inner_completion_rate')}
+                                </span>
+                                <span className="font-mono text-xs font-bold text-white bg-white/5 px-2 py-0.5 rounded-lg border border-white/5">
+                                    {stats.completedTasks}/{stats.totalTasks}
+                                </span>
+                            </div>
                         </div>
-                        <div className="relative h-2.5 w-full overflow-hidden rounded-full bg-black/30 shadow-[inset_0_1px_2px_rgba(0,0,0,0.5)] border border-white/5">
-                            <div className="absolute left-0 top-0 h-full rounded-full bg-gradient-to-r from-violet-500 to-fuchsia-500 shadow-[0_0_15px_rgba(192,132,252,0.4)] transition-all duration-1000" style={{ width: `${tasksProgress}%` }}></div>
+                        <div className="relative h-3 w-full overflow-hidden rounded-full bg-black/40 border border-white/5 shadow-inner">
+                            <div 
+                                className="absolute left-0 top-0 h-full rounded-full bg-gradient-to-r from-violet-600 to-fuchsia-500 transition-all duration-1000 ease-out shadow-[0_0_15px_rgba(167,139,250,0.4)]" 
+                                style={{ width: `${stats.taskProgress}%` }}
+                            >
+                                <div className="absolute inset-0 bg-[linear-gradient(90deg,transparent_0%,rgba(255,255,255,0.2)_50%,transparent_100%)] animate-[shimmer_2s_infinite]"></div>
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                {/* Action Grid - Glass Tiles */}
-                <div className="mt-8 grid grid-cols-2 gap-3 md:gap-4">
+                {/* Footer Actions: Glass Buttons */}
+                <div className="mt-auto grid grid-cols-2 gap-4">
                     <button 
                         onClick={() => onManageTasks(project)}
-                        className="group/btn relative flex flex-col items-center justify-center gap-2 overflow-hidden rounded-2xl bg-white/5 py-4 backdrop-blur-md transition-all hover:bg-white/10 active:scale-95 border border-white/5 shadow-lg"
+                        className="group/btn relative flex flex-col items-center justify-center gap-2 overflow-hidden rounded-2xl bg-white/5 py-4 backdrop-blur-md transition-all hover:bg-white/10 active:scale-95 border border-white/5 shadow-xl"
+                        title={t('tasks')}
                     >
                         <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/10 to-transparent opacity-0 group-hover/btn:opacity-100 transition-opacity"></div>
-                        <ClockIcon className="h-5 w-5 text-indigo-300 transition-transform duration-300 group-hover/btn:scale-110 group-hover/btn:text-white" />
-                        <span className="text-[10px] font-black uppercase tracking-widest text-white/70">{t('tasks')}</span>
+                        <ClockIcon className="h-6 w-6 text-indigo-400 transition-transform duration-300 group-hover/btn:scale-110 group-hover/btn:text-white" />
+                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 group-hover/btn:text-white">{t('tasks')}</span>
                     </button>
 
                     <button 
                         onClick={() => project.planFile ? onViewPlan(project) : null}
                         disabled={!project.planFile}
-                        className={`group/btn relative flex flex-col items-center justify-center gap-2 overflow-hidden rounded-2xl py-4 backdrop-blur-md transition-all border border-white/5 shadow-lg ${project.planFile ? 'bg-blue-600/10 hover:bg-blue-600/20 active:scale-95' : 'bg-black/20 opacity-40 cursor-not-allowed'}`}
+                        className={`group/btn relative flex flex-col items-center justify-center gap-2 overflow-hidden rounded-2xl py-4 backdrop-blur-md transition-all border border-white/5 shadow-xl ${project.planFile ? 'bg-cyan-500/10 hover:bg-cyan-500/20 active:scale-95' : 'bg-black/20 opacity-30 cursor-not-allowed grayscale'}`}
+                        title={t('plan')}
                     >
-                        <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-transparent opacity-0 group-hover/btn:opacity-100 transition-opacity"></div>
-                        <MapIcon className={`h-5 w-5 transition-transform duration-300 ${project.planFile ? 'text-blue-300 group-hover/btn:scale-110 group-hover/btn:text-white' : 'text-gray-500'}`} />
-                        <span className="text-[10px] font-black uppercase tracking-widest text-white/70">{t('plan')}</span>
+                        <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/10 to-transparent opacity-0 group-hover/btn:opacity-100 transition-opacity"></div>
+                        <MapIcon className={`h-6 w-6 transition-transform duration-300 ${project.planFile ? 'text-cyan-400 group-hover/btn:scale-110 group-hover/btn:text-white' : 'text-slate-500'}`} />
+                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 group-hover/btn:text-white">{t('plan')}</span>
                     </button>
                 </div>
             </div>
             
-            {/* Last Activity Footer */}
-            {lastActivity && (
-                <div className="bg-black/20 px-6 py-2 backdrop-blur-sm border-t border-white/5">
-                    <div className="flex items-center gap-2 text-[9px] font-bold uppercase tracking-widest text-white/30">
-                        <div className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse"></div>
-                        <span className="truncate">{t('last_activity')}: {new Date(lastActivity.timestamp).toLocaleDateString()}</span>
-                    </div>
-                </div>
-            )}
+            {/* Bottom Accent Bar */}
+            <div className={`h-1.5 w-full bg-gradient-to-r ${getStatusColor(project.status)} opacity-30`}></div>
         </div>
     );
 };
@@ -253,27 +361,18 @@ const Projects: React.FC = () => {
               await db.projects.update(project.id!, { googleSpreadsheetId: spreadsheetId });
           }
 
-          // Gather ALL data for this project
           const pTables = await db.solarTables.where('projectId').equals(project.id!).toArray();
           const pTasks = await db.projectTasks.where('projectId').equals(project.id!).toArray();
           const pRecords = await db.records.where('projectId').equals(project.id!).toArray();
           const pWorkers = await db.workers.toArray();
 
-          const dataPayload = {
-              project,
-              tables: pTables,
-              tasks: pTasks,
-              records: pRecords,
-              workers: pWorkers
-          };
-
+          const dataPayload = { project, tables: pTables, tasks: pTasks, records: pRecords, workers: pWorkers };
           await googleSheetsService.syncProjectData(spreadsheetId, dataPayload);
           
-          await db.projects.update(project.id!, { lastSync: new Date() });
+          const syncTimestamp = new Date();
+          await db.projects.update(project.id!, { lastSync: syncTimestamp });
           showToast('Project synced successfully!', 'success');
-          // Optionally open the sheet
           window.open(`https://docs.google.com/spreadsheets/d/${spreadsheetId}`, '_blank');
-
       } catch (e) {
           console.error(e);
           showToast('Sync failed. Check console or API Key.', 'error');
@@ -285,34 +384,34 @@ const Projects: React.FC = () => {
   const filterOptions: ('all' | 'active' | 'completed' | 'on_hold')[] = ['all', 'active', 'completed', 'on_hold'];
 
   return (
-    <div className="space-y-8 md:space-y-12 pb-24 md:pb-12">
+    <div className="space-y-8 md:space-y-12 pb-32">
       {syncing && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm">
-              <div className="bg-slate-900 p-8 rounded-3xl border border-white/20 flex flex-col items-center gap-4">
+              <div className="bg-slate-900 p-8 rounded-[2.5rem] border border-white/20 flex flex-col items-center gap-4 shadow-2xl">
                   <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[var(--color-accent)]"></div>
-                  <p className="text-white font-bold animate-pulse">Synchronizing with Google Sheets...</p>
+                  <p className="text-white font-black uppercase tracking-widest animate-pulse">Synchronizing with Google Sheets...</p>
               </div>
           </div>
       )}
 
-      <header className="flex flex-col lg:flex-row justify-between items-start lg:items-end gap-6 md:gap-10">
-          <div className="space-y-2 md:space-y-4">
+      <header className="flex flex-col lg:flex-row justify-between items-start lg:items-end gap-6">
+          <div className="space-y-3">
             <h1 className="text-5xl md:text-8xl font-black text-white tracking-tighter uppercase italic leading-[0.8] drop-shadow-2xl">
                {t('projects')}<span className="text-[var(--color-accent)]">.</span>
             </h1>
-            <p className="text-sm md:text-2xl text-slate-300 font-bold tracking-tight max-w-2xl border-l-4 border-[var(--color-accent)] pl-4 md:pl-6 py-2">
-              Strategický přehled montáže a technologického postupu solárních polí.
+            <p className="text-sm md:text-xl text-slate-400 font-bold tracking-tight max-w-2xl border-l-4 border-[var(--color-accent)] pl-4 py-1">
+              Komplexní přehled výstavby a technologického postupu solárních polí.
             </p>
           </div>
           <div className="flex gap-3 w-full lg:w-auto">
              {user?.role === 'admin' && (
-                 <Link to="/statistics" className="flex-1 lg:flex-none flex items-center justify-center gap-3 px-6 py-4 bg-slate-900/50 text-white font-black uppercase tracking-widest rounded-2xl hover:bg-slate-800 transition-all border border-white/10 backdrop-blur-md active:scale-95 shadow-lg text-xs md:text-sm">
+                 <Link to="/statistics" className="flex-1 lg:flex-none flex items-center justify-center gap-3 px-8 py-4 bg-slate-900/50 text-white font-black uppercase tracking-widest rounded-2xl hover:bg-slate-800 transition-all border border-white/10 backdrop-blur-md active:scale-95 shadow-lg text-xs" title={t('statistics')}>
                     <ChartBarIcon className="w-5 h-5 text-[var(--color-accent)]" />
-                    <span className="hidden sm:inline">{t('statistics')}</span>
+                    {t('statistics')}
                  </Link>
              )}
              {user?.role === 'admin' && (
-                 <button onClick={handleAdd} className="flex-1 lg:flex-none flex items-center justify-center gap-3 px-6 py-4 bg-white text-black font-black uppercase tracking-widest rounded-2xl hover:bg-[var(--color-accent)] hover:text-white transition-all shadow-[0_0_40px_rgba(255,255,255,0.3)] active:scale-95 group text-xs md:text-sm">
+                 <button onClick={handleAdd} className="flex-1 lg:flex-none flex items-center justify-center gap-3 px-8 py-4 bg-white text-black font-black uppercase tracking-widest rounded-2xl hover:bg-[var(--color-accent)] hover:text-white transition-all shadow-[0_15px_40px_rgba(255,255,255,0.15)] active:scale-95 group text-xs" title={t('add_project')}>
                     <PlusIcon className="w-5 h-5 group-hover:rotate-90 transition-transform" />
                     {t('add_project')}
                  </button>
@@ -320,64 +419,58 @@ const Projects: React.FC = () => {
           </div>
       </header>
       
-      {/* Optimized Search and Filter Bar */}
-      <div className="flex flex-col xl:flex-row gap-4 p-4 bg-white/5 rounded-[2rem] border border-white/10 backdrop-blur-2xl shadow-2xl">
-        {/* Input Group: Stacks on mobile, Grid on MD */}
+      {/* Search and Filter Section */}
+      <div className="flex flex-col xl:flex-row gap-4 p-4 bg-white/[0.03] rounded-[2.5rem] border border-white/10 backdrop-blur-3xl shadow-2xl">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 w-full xl:w-auto xl:flex-1">
-            <div className="relative w-full">
+            <div className="relative group">
                 <input
                     type="text"
                     placeholder={`${t('search')}...`}
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full pl-12 pr-4 py-3.5 bg-black/20 text-white placeholder-slate-400 border border-white/5 rounded-2xl focus:ring-2 focus:ring-[var(--color-accent)] focus:bg-black/30 transition-all text-base font-bold shadow-inner"
+                    className="w-full pl-12 pr-4 py-4 bg-black/30 text-white placeholder-slate-500 border-none rounded-2xl focus:ring-2 focus:ring-[var(--color-accent)] transition-all font-bold"
                 />
-                <div className="absolute left-4 top-1/2 -translate-y-1/2 p-1 bg-white/10 rounded-full">
-                    <SearchIcon className="w-4 h-4 text-white" />
-                </div>
+                <SearchIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500 group-focus-within:text-[var(--color-accent)] transition-colors" />
             </div>
 
-            <div className="relative w-full group">
-                <div className="absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 group-focus-within:text-[var(--color-accent)] transition-colors p-1 bg-white/10 rounded-full">
-                    <WorkersIcon className="w-4 h-4" />
-                </div>
+            <div className="relative group">
                 <select
                     value={workerFilter}
                     onChange={(e) => setWorkerFilter(e.target.value === 'all' ? 'all' : Number(e.target.value))}
-                    className="w-full pl-14 pr-10 py-3.5 bg-black/20 text-white border border-white/5 rounded-2xl appearance-none focus:ring-2 focus:ring-[var(--color-accent)] focus:bg-black/30 transition-all text-sm font-bold shadow-inner cursor-pointer [&>option]:bg-slate-900 [&>option]:text-white"
+                    className="w-full pl-12 pr-10 py-4 bg-black/30 text-white border-none rounded-2xl appearance-none focus:ring-2 focus:ring-[var(--color-accent)] transition-all font-bold cursor-pointer [&>option]:bg-slate-900"
+                    title={t('filter_by_worker')}
                 >
                     <option value="all">{t('all_workers')}</option>
                     {workers?.map(w => (
                         <option key={w.id} value={w.id}>{w.name}</option>
                     ))}
                 </select>
+                <WorkersIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500 pointer-events-none group-focus-within:text-[var(--color-accent)] transition-colors" />
                 <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M19 9l-7 7-7-7"></path></svg>
                 </div>
             </div>
         </div>
 
-        {/* Status Pills: Scrollable on mobile, flexible on desktop */}
-        <div className="w-full xl:w-auto overflow-x-auto pb-1 min-w-0">
-            <div className="flex gap-2 min-w-max">
-                {filterOptions.map((status) => (
-                    <button
-                        key={status}
-                        onClick={() => setStatusFilter(status)}
-                        className={`px-5 py-3.5 rounded-2xl font-bold text-xs transition-all border uppercase tracking-wider whitespace-nowrap backdrop-blur-md ${
-                            statusFilter === status
-                            ? 'bg-white text-black border-white shadow-[0_0_20px_rgba(255,255,255,0.4)] scale-105'
-                            : 'bg-white/5 text-slate-300 border-white/5 hover:bg-white/10 hover:text-white'
-                        }`}
-                    >
-                        {t(status === 'all' ? 'all_statuses' : (status as any))}
-                    </button>
-                ))}
-            </div>
+        <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide px-1">
+            {filterOptions.map((status) => (
+                <button
+                    key={status}
+                    onClick={() => setStatusFilter(status)}
+                    className={`px-6 py-4 rounded-2xl font-black text-[10px] transition-all border uppercase tracking-widest whitespace-nowrap ${
+                        statusFilter === status
+                        ? 'bg-white text-black border-white shadow-[0_0_25px_rgba(255,255,255,0.3)] scale-105'
+                        : 'bg-white/5 text-slate-400 border-white/5 hover:bg-white/10 hover:text-white'
+                    }`}
+                    title={t(status === 'all' ? 'all_statuses' : (status as any))}
+                >
+                    {t(status === 'all' ? 'all_statuses' : (status as any))}
+                </button>
+            ))}
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 md:gap-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 md:gap-8 lg:gap-10">
         {filteredProjects.map((project, idx) => (
           <ProjectCard 
             key={project.id} 
@@ -393,12 +486,11 @@ const Projects: React.FC = () => {
         ))}
         
         {filteredProjects.length === 0 && (
-          <div className="col-span-full py-40 text-center flex flex-col items-center justify-center opacity-50">
-            <div className="w-24 h-24 bg-white/5 rounded-full flex items-center justify-center mb-6 border border-white/10 shadow-[0_0_60px_rgba(255,255,255,0.05)]">
+          <div className="col-span-full py-40 text-center opacity-40">
+            <div className="w-24 h-24 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-6 border border-white/10">
                 <SearchIcon className="w-10 h-10 text-slate-500" />
             </div>
             <p className="text-slate-400 text-2xl font-black uppercase tracking-widest italic">{t('no_data')}</p>
-            <p className="text-slate-600 font-bold mt-2 uppercase tracking-widest text-sm">Nebyly nalezeny žádné projekty.</p>
           </div>
         )}
       </div>
@@ -408,8 +500,8 @@ const Projects: React.FC = () => {
       {managingTasksFor && <ProjectTasksModal project={managingTasksFor} onClose={() => setManagingTasksFor(null)} />}
       {projectToDelete && (
         <ConfirmationModal
-          title={t('confirm_delete')}
-          message={`Operace je nevratná. Systém trvale odstraní projekt "${projectToDelete.name}". Potvrdit smazání?`}
+          title={t('delete_project')}
+          message={`Systém trvale odstraní projekt "${projectToDelete.name}" včetně všech dat o stolech a úkolech. Potvrdit?`}
           onConfirm={handleDelete}
           onCancel={() => setProjectToDelete(null)}
         />

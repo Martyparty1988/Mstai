@@ -13,7 +13,6 @@ import RedoIcon from './icons/RedoIcon';
 import TrashIcon from './icons/TrashIcon';
 import ColorSwatchIcon from './icons/ColorSwatchIcon';
 import ConfirmationModal from './ConfirmationModal';
-// Import MapIcon to fix the "Cannot find name 'MapIcon'" error
 import MapIcon from './icons/MapIcon';
 
 declare const pdfjsLib: any;
@@ -46,7 +45,6 @@ const TableManagementModal: React.FC<TableManagementModalProps> = ({ table, coor
 
     const workers: Worker[] | undefined = useLiveQuery(() => db.workers.toArray());
     const assignments = useLiveQuery(() => table ? db.tableAssignments.where('tableId').equals(table.id!).toArray() : [], [table]);
-    const history = useLiveQuery(() => table ? db.tableStatusHistory.where('tableId').equals(table.id!).reverse().sortBy('timestamp') : [], [table]);
     const workerMap = useMemo(() => new Map(workers?.map(w => [w.id!, w]) || []), [workers]);
     
     useEffect(() => {
@@ -233,20 +231,31 @@ const Plan: React.FC = () => {
     const [strokeWidth, setStrokeWidth] = useState(2);
     const [strokeColor, setStrokeColor] = useState('#ff0000');
 
+    // Ref to track what project/page the local paths/redoStack belong to
+    const lastLoadedViewRef = useRef<{projectId: number | '', pageNum: number}>({ projectId: '', pageNum: 1 });
+
     const projects = useLiveQuery(() => db.projects.toArray());
     const selectedProject = useMemo(() => projects?.find(p => p.id === selectedProjectId), [projects, selectedProjectId]);
     const tables = useLiveQuery(() => selectedProjectId ? db.solarTables.where('projectId').equals(selectedProjectId).toArray() : [], [selectedProjectId]);
-    const annotations = useLiveQuery(() => (selectedProjectId && pageNum) ? db.planAnnotations.where({ projectId: selectedProjectId, page: pageNum }).first() : null, [selectedProjectId, pageNum]);
+    
+    // Live query for existing annotations
+    const annotations = useLiveQuery(
+        () => (selectedProjectId && pageNum) ? db.planAnnotations.where({ projectId: selectedProjectId, page: pageNum }).first() : null, 
+        [selectedProjectId, pageNum]
+    );
 
+    // Load annotations into state when project/page changes
     useEffect(() => {
-        if (annotations) {
-            setPaths(annotations.paths);
+        if (selectedProjectId !== lastLoadedViewRef.current.projectId || pageNum !== lastLoadedViewRef.current.pageNum) {
+            if (annotations) {
+                setPaths(annotations.paths);
+            } else {
+                setPaths([]);
+            }
             setRedoStack([]);
-        } else {
-            setPaths([]);
-            setRedoStack([]);
+            lastLoadedViewRef.current = { projectId: selectedProjectId, pageNum };
         }
-    }, [annotations]);
+    }, [annotations, selectedProjectId, pageNum]);
 
     useEffect(() => {
         if (typeof pdfjsLib !== 'undefined') {
@@ -336,6 +345,16 @@ const Plan: React.FC = () => {
         setEditingTable(undefined);
     };
 
+    const savePathsToDB = async (currentPaths: AnnotationPath[]) => {
+        if (!selectedProjectId || !pageNum) return;
+        const existing = await db.planAnnotations.where({ projectId: selectedProjectId, page: pageNum }).first();
+        if (existing) {
+            await db.planAnnotations.update(existing.id!, { paths: currentPaths });
+        } else {
+            await db.planAnnotations.add({ projectId: selectedProjectId as number, page: pageNum, paths: currentPaths });
+        }
+    };
+
     const startDrawing = (e: React.MouseEvent) => {
         if (!drawingMode) return;
         setIsDrawing(true);
@@ -356,29 +375,27 @@ const Plan: React.FC = () => {
     };
 
     const stopDrawing = async () => {
+        if (!isDrawing) return;
         setIsDrawing(false);
-        if (selectedProjectId && pageNum) {
-            const annotation = await db.planAnnotations.where({ projectId: selectedProjectId, page: pageNum }).first();
-            if (annotation) {
-                await db.planAnnotations.update(annotation.id!, { paths });
-            } else {
-                await db.planAnnotations.add({ projectId: selectedProjectId as number, page: pageNum, paths });
-            }
-        }
+        await savePathsToDB(paths);
     };
 
-    const undo = () => {
+    const undo = async () => {
         if (paths.length === 0) return;
         const last = paths[paths.length - 1];
+        const newPaths = paths.slice(0, -1);
         setRedoStack([...redoStack, last]);
-        setPaths(paths.slice(0, -1));
+        setPaths(newPaths);
+        await savePathsToDB(newPaths);
     };
 
-    const redo = () => {
+    const redo = async () => {
         if (redoStack.length === 0) return;
         const last = redoStack[redoStack.length - 1];
-        setPaths([...paths, last]);
+        const newPaths = [...paths, last];
+        setPaths(newPaths);
         setRedoStack(redoStack.slice(0, -1));
+        await savePathsToDB(newPaths);
     };
 
     return (

@@ -51,6 +51,8 @@ export const locales = {
     delete_table_title: 'Delete Table',
     delete_table_confirm: 'Are you sure you want to delete table {code}?',
     delete_task_title: 'Delete Task',
+    // Fix: Added delete_project key
+    delete_project: 'Delete Project',
     reset_app_title: 'Reset Application',
     reset_app_confirm: 'WARNING: This will delete ALL data in the application! This action is irreversible. Proceed?',
     performance_overview: 'Performance Overview',
@@ -80,6 +82,7 @@ export const locales = {
     project_statistics: 'Project Statistics',
     total_projects: 'Total Projects',
     completion_rate: 'Completion Rate',
+    inner_completion_rate: 'Project Progress',
     in_progress_on_hold: 'In Progress / On Hold',
     total_hours_per_project: 'Total Hours per Project',
     total_cost_per_project: 'Total Cost per Project (€)',
@@ -340,7 +343,9 @@ export const locales = {
     drive_not_connected: 'Not Connected',
     voice_output: 'Voice Output',
     enable_voice_output: 'Enable voice response',
-    sync_to_sheets: 'Sync to Sheets'
+    sync_to_sheets: 'Sync to Sheets',
+    last_sync: 'Last Sync',
+    never: 'Never'
   },
   cs: {
     login: 'Přihlásit se',
@@ -392,6 +397,8 @@ export const locales = {
     delete_table_title: 'Smazat stůl',
     delete_table_confirm: 'Opravdu chcete smazat stůl {code}?',
     delete_task_title: 'Smazat úkol',
+    // Fix: Added delete_project key
+    delete_project: 'Smazat projekt',
     reset_app_title: 'Resetovat aplikaci',
     reset_app_confirm: 'VAROVÁNÍ: Tímto smažete VŠECHNA data v aplikaci! Tato akce je nevratná. Pokračovat?',
     performance_overview: 'Přehled výkonu',
@@ -421,6 +428,7 @@ export const locales = {
     project_statistics: 'Statistiky projektu',
     total_projects: 'Celkem projektů',
     completion_rate: 'Míra dokončení',
+    inner_completion_rate: 'Postup projektu',
     in_progress_on_hold: 'V procesu / Pozastaveno',
     total_hours_per_project: 'Celkem hodin na projekt',
     total_cost_per_project: 'Celkové náklady na projekt (€)',
@@ -681,6 +689,8 @@ export const locales = {
     drive_not_connected: 'Nepřipojeno',
     voice_output: 'Hlasová odezva',
     enable_voice_output: 'Povolit hlasovou odpověď',
-    sync_to_sheets: 'Synchronizovat do Tabulek'
+    sync_to_sheets: 'Synchronizovat do Tabulek',
+    last_sync: 'Poslední synchronizace',
+    never: 'Nikdy'
   },
 };

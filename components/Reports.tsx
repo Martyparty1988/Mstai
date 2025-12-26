@@ -1,9 +1,11 @@
+
 import React, { useState, useMemo } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../services/db';
 import { useI18n } from '../contexts/I18nContext';
 import type { TimeRecord, Worker, Project, ProjectTask } from '../types';
 import DocumentTextIcon from './icons/DocumentTextIcon';
+import DownloadIcon from './icons/DownloadIcon';
 
 // Helper to get today's date in YYYY-MM-DD format
 const getTodayString = () => new Date().toISOString().split('T')[0];
@@ -119,10 +121,26 @@ const Reports: React.FC = () => {
     const handleExportCSV = () => {
         if (!reportData) return;
 
-        const headers = [t('type'), t('worker_name'), t('project_name'), t('description'), t('date_or_start_time'), t('end_time'), t('duration'), t('cost')];
+        const escapeCSV = (str: string) => {
+            if (typeof str !== 'string') return str;
+            const escaped = str.replace(/"/g, '""');
+            return `"${escaped}"`;
+        };
+
+        const headers = [
+            t('type'), 
+            t('worker_name'), 
+            t('project_name'), 
+            t('description'), 
+            t('date_or_start_time'), 
+            t('end_time'), 
+            t('duration'), 
+            t('cost')
+        ];
         
         const recordRows = reportData.records.map(record => {
-            const workerName = workerMap.get(record.workerId)?.name || 'N/A';
+            const worker = workerMap.get(record.workerId);
+            const workerName = worker?.name || 'N/A';
             const projectName = projectMap.get(record.projectId)?.name || 'N/A';
             const startTime = new Date(record.startTime).toLocaleString();
             const endTime = new Date(record.endTime).toLocaleString();
@@ -130,9 +148,18 @@ const Reports: React.FC = () => {
             const hours = Math.floor(durationMs / 3600000);
             const minutes = Math.floor((durationMs % 3600000) / 60000);
             const duration = `${hours}h ${minutes}m`;
-            const cost = ((durationMs / (1000 * 60 * 60)) * (workerMap.get(record.workerId)?.hourlyRate || 0)).toFixed(2);
+            const cost = ((durationMs / (1000 * 60 * 60)) * (worker?.hourlyRate || 0)).toFixed(2);
 
-            return ['Hourly', workerName, projectName, `"${record.description.replace(/"/g, '""')}"`, startTime, endTime, duration, cost].join(',');
+            return [
+                escapeCSV('Hourly'), 
+                escapeCSV(workerName), 
+                escapeCSV(projectName), 
+                escapeCSV(record.description), 
+                escapeCSV(startTime), 
+                escapeCSV(endTime), 
+                escapeCSV(duration), 
+                escapeCSV(cost)
+            ].join(',');
         });
 
         const taskRows = reportData.tasks.map(task => {
@@ -140,17 +167,32 @@ const Reports: React.FC = () => {
             const projectName = projectMap.get(task.projectId)?.name || 'N/A';
             const completionDate = new Date(task.completionDate!).toLocaleDateString();
             
-            return ['Task', workerName, projectName, `"${task.description.replace(/"/g, '""')}"`, completionDate, '', '', task.price.toFixed(2)].join(',');
+            return [
+                escapeCSV('Task'), 
+                escapeCSV(workerName), 
+                escapeCSV(projectName), 
+                escapeCSV(task.description), 
+                escapeCSV(completionDate), 
+                escapeCSV(''), 
+                escapeCSV(''), 
+                escapeCSV(task.price.toFixed(2))
+            ].join(',');
         });
 
-        const csvContent = "data:text/csv;charset=utf-8," + [headers.join(','), ...recordRows, ...taskRows].join('\n');
-        const encodedUri = encodeURI(csvContent);
+        const csvContent = [headers.map(escapeCSV).join(','), ...recordRows, ...taskRows].join('\n');
+        
+        // Use UTF-8 with BOM for Excel compatibility
+        const BOM = '\uFEFF';
+        const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        
         const link = document.createElement("a");
-        link.setAttribute("href", encodedUri);
-        link.setAttribute("download", `report_${reportStats?.title.replace(/\s/g, '_') || 'export'}.csv`);
+        link.setAttribute("href", url);
+        link.setAttribute("download", `MST_Report_${reportStats?.title.replace(/[^a-z0-9]/gi, '_') || 'export'}.csv`);
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+        URL.revokeObjectURL(url);
     };
 
     const renderDateInputs = () => {
@@ -217,10 +259,14 @@ const Reports: React.FC = () => {
             </div>
 
             {reportData && reportStats && (
-                <div className="p-8 bg-black/20 backdrop-blur-2xl rounded-3xl border border-white/10 shadow-lg">
-                    <div className="flex justify-between items-center mb-6">
+                <div className="p-8 bg-black/20 backdrop-blur-2xl rounded-3xl border border-white/10 shadow-lg animate-page-enter">
+                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
                         <h2 className="text-3xl font-bold text-white">{reportStats.title}</h2>
-                        <button onClick={handleExportCSV} className="px-6 py-3 bg-green-600/80 text-white font-bold rounded-xl hover:bg-green-600 transition shadow-md text-lg">
+                        <button 
+                            onClick={handleExportCSV} 
+                            className="flex items-center gap-2 px-6 py-3 bg-emerald-600/80 text-white font-bold rounded-xl hover:bg-emerald-600 transition shadow-md text-lg active:scale-95"
+                        >
+                            <DownloadIcon className="w-5 h-5" />
                             {t('export_to_csv')}
                         </button>
                     </div>
@@ -234,7 +280,6 @@ const Reports: React.FC = () => {
                          <div className="p-6 bg-black/20 rounded-2xl border border-white/10 text-center">
                             <h3 className="text-xl font-bold text-gray-300 mb-2">{t('total_task_cost')}</h3>
                             <p className="text-4xl font-extrabold text-white">€{reportStats.totalTaskCost.toFixed(2)}</p>
-                            <p className="text-gray-400">({reportData.tasks.length} {t('tasks')})</p>
                         </div>
                          <div className="p-6 bg-gradient-to-br from-[var(--color-primary)] to-[var(--color-accent)] rounded-2xl text-center">
                             <h3 className="text-xl font-bold text-white mb-2">{t('total_cost')}</h3>
@@ -242,7 +287,7 @@ const Reports: React.FC = () => {
                         </div>
                     </div>
 
-                    <div className="overflow-x-auto">
+                    <div className="overflow-x-auto custom-scrollbar">
                         <h3 className="text-2xl font-bold text-white mb-4">{t('records')}</h3>
                         <table className="min-w-full divide-y divide-white/10 mb-8">
                              <thead className="bg-white/10">

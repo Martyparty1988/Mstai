@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../services/db';
@@ -8,6 +7,9 @@ import WorkerForm from './WorkerForm';
 import { useAuth } from '../contexts/AuthContext';
 import ConfirmationModal from './ConfirmationModal';
 import PlusIcon from './icons/PlusIcon';
+import SearchIcon from './icons/SearchIcon';
+import PencilIcon from './icons/PencilIcon';
+import TrashIcon from './icons/TrashIcon';
 
 const WorkerCard: React.FC<{
     worker: Worker;
@@ -38,11 +40,19 @@ const WorkerCard: React.FC<{
             </div>
             {isAdmin && (
                 <div className="flex gap-2">
-                    <button onClick={() => onEdit(worker)} className="p-3 text-gray-400 hover:text-white hover:bg-white/5 rounded-2xl transition-all">
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                    <button 
+                        onClick={() => onEdit(worker)} 
+                        className="p-3 text-gray-400 hover:text-white hover:bg-white/5 rounded-2xl transition-all"
+                        title={t('edit_worker')}
+                    >
+                        <PencilIcon className="w-5 h-5" />
                     </button>
-                    <button onClick={() => onDelete(worker)} className="p-3 text-gray-400 hover:text-pink-500 hover:bg-pink-500/5 rounded-2xl transition-all">
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                    <button 
+                        onClick={() => onDelete(worker)} 
+                        className="p-3 text-gray-400 hover:text-pink-500 hover:bg-pink-500/5 rounded-2xl transition-all"
+                        title={t('delete_worker_title')}
+                    >
+                        <TrashIcon className="w-5 h-5" />
                     </button>
                 </div>
             )}
@@ -55,6 +65,9 @@ const Workers: React.FC = () => {
   const { user } = useAuth();
   const [showForm, setShowForm] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [minRate, setMinRate] = useState('');
+  const [maxRate, setMaxRate] = useState('');
+  const [sortBy, setSortBy] = useState<'name' | 'rate_asc' | 'rate_desc'>('name');
   const [workerToDelete, setWorkerToDelete] = useState<Worker | null>(null);
   const [editingWorker, setEditingWorker] = useState<Worker | undefined>(undefined);
 
@@ -62,10 +75,22 @@ const Workers: React.FC = () => {
 
   const filteredWorkers = useMemo(() => {
     if (!workers) return [];
+    const min = minRate !== '' ? Number(minRate) : 0;
+    const max = maxRate !== '' ? Number(maxRate) : Infinity;
+
     return workers
-        .filter(worker => worker.name.toLowerCase().includes(searchTerm.toLowerCase()))
-        .sort((a, b) => a.name.localeCompare(b.name));
-  }, [workers, searchTerm]);
+        .filter(worker => {
+            const matchesName = worker.name.toLowerCase().includes(searchTerm.toLowerCase());
+            const matchesRate = worker.hourlyRate >= min && worker.hourlyRate <= max;
+            return matchesName && matchesRate;
+        })
+        .sort((a, b) => {
+            if (sortBy === 'name') return a.name.localeCompare(b.name);
+            if (sortBy === 'rate_asc') return a.hourlyRate - b.hourlyRate;
+            if (sortBy === 'rate_desc') return b.hourlyRate - a.hourlyRate;
+            return 0;
+        });
+  }, [workers, searchTerm, minRate, maxRate, sortBy]);
 
   const handleAdd = () => {
     setEditingWorker(undefined);
@@ -89,7 +114,7 @@ const Workers: React.FC = () => {
   };
 
   return (
-    <div className="space-y-12">
+    <div className="space-y-12 pb-24">
       <header className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
           <div className="space-y-2">
             <h1 className="text-6xl font-black text-white tracking-tighter uppercase italic leading-[0.8]">
@@ -100,23 +125,75 @@ const Workers: React.FC = () => {
             </p>
           </div>
           {user?.role === 'admin' && (
-              <button onClick={handleAdd} className="w-full md:w-auto flex items-center justify-center gap-2 px-8 py-4 bg-white text-black font-black uppercase tracking-widest rounded-2xl hover:bg-[var(--color-accent)] hover:text-white transition-all shadow-[0_10px_30px_rgba(255,255,255,0.2)]">
+              <button 
+                onClick={handleAdd} 
+                className="w-full md:w-auto flex items-center justify-center gap-2 px-8 py-4 bg-white text-black font-black uppercase tracking-widest rounded-2xl hover:bg-[var(--color-accent)] hover:text-white transition-all shadow-[0_10px_30px_rgba(255,255,255,0.2)]"
+                title={t('add_worker')}
+              >
                 <PlusIcon className="w-5 h-5" />
                 {t('add_worker')}
               </button>
           )}
       </header>
 
-      <div className="p-4 glass-card rounded-[2rem] border-white/5">
-        <div className="relative w-full max-w-xl mx-auto md:mx-0">
-            <input
-                type="text"
-                placeholder={`${t('search')}...`}
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-12 pr-4 py-4 bg-black/40 text-white placeholder-gray-500 border-none rounded-2xl focus:ring-2 focus:ring-[var(--color-accent)] text-sm font-bold uppercase tracking-widest"
-            />
-            <svg className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+      {/* Enhanced Filter Section */}
+      <div className="p-6 glass-card rounded-[2.5rem] border border-white/10 bg-slate-900/40 backdrop-blur-3xl shadow-xl">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+            {/* Name Search */}
+            <div className="relative group lg:col-span-1">
+                <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2 ml-1">{t('search')}</label>
+                <div className="relative">
+                    <input
+                        type="text"
+                        placeholder={`${t('search')}...`}
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="w-full pl-12 pr-4 py-4 bg-black/40 text-white placeholder-gray-500 border-none rounded-2xl focus:ring-2 focus:ring-[var(--color-accent)] text-sm font-bold uppercase tracking-widest transition-all"
+                    />
+                    <SearchIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500 group-focus-within:text-[var(--color-accent)] transition-colors" />
+                </div>
+            </div>
+
+            {/* Sorting and Range Filters */}
+            <div className="lg:col-span-3 grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="relative group">
+                    <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2 ml-1">Seřadit podle</label>
+                    <select
+                        value={sortBy}
+                        onChange={(e) => setSortBy(e.target.value as any)}
+                        className="w-full p-4 bg-black/40 text-white border-none rounded-2xl focus:ring-2 focus:ring-[var(--color-accent)] text-sm font-bold transition-all appearance-none cursor-pointer [&>option]:bg-slate-900"
+                    >
+                        <option value="name">Jméno (A-Z)</option>
+                        <option value="rate_asc">Sazba (Vzestupně)</option>
+                        <option value="rate_desc">Sazba (Sestupně)</option>
+                    </select>
+                </div>
+
+                {user?.role === 'admin' && (
+                    <>
+                        <div className="relative group">
+                            <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2 ml-1">Min. €/h</label>
+                            <input
+                                type="number"
+                                placeholder="0"
+                                value={minRate}
+                                onChange={(e) => setMinRate(e.target.value)}
+                                className="w-full p-4 bg-black/40 text-white placeholder-gray-600 border-none rounded-2xl focus:ring-2 focus:ring-[var(--color-accent)] text-sm font-bold transition-all"
+                            />
+                        </div>
+                        <div className="relative group">
+                            <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2 ml-1">Max. €/h</label>
+                            <input
+                                type="number"
+                                placeholder="100"
+                                value={maxRate}
+                                onChange={(e) => setMaxRate(e.target.value)}
+                                className="w-full p-4 bg-black/40 text-white placeholder-gray-600 border-none rounded-2xl focus:ring-2 focus:ring-[var(--color-accent)] text-sm font-bold transition-all"
+                            />
+                        </div>
+                    </>
+                )}
+            </div>
         </div>
       </div>
 
@@ -133,7 +210,10 @@ const Workers: React.FC = () => {
         ))}
         
         {filteredWorkers.length === 0 && (
-          <div className="col-span-full py-32 text-center glass-card rounded-[3rem]">
+          <div className="col-span-full py-32 text-center glass-card rounded-[3rem] border border-white/5 bg-white/[0.01]">
+            <div className="w-24 h-24 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-6">
+                <SearchIcon className="w-10 h-10 text-gray-600" />
+            </div>
             <p className="text-gray-500 text-2xl font-black uppercase tracking-widest italic opacity-50">{t('no_data')}</p>
           </div>
         )}

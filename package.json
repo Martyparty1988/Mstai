@@ -9,15 +9,15 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "react": "^19.2.0",
-    "react-router-dom": "^7.9.5",
-    "recharts": "^3.3.0",
-    "react-dom": "^19.2.0",
-    "dexie": "^4.2.1",
-    "dexie-react-hooks": "^4.2.0",
-    "@google/genai": "^0.15.0",
-    "xlsx": "^0.18.5",
-    "papaparse": "^5.4.1",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3",
+    "react-router-dom": "7.0.0",
+    "recharts": "2.15.0",
+    "dexie": "4.0.8",
+    "dexie-react-hooks": "4.0.2",
+    "@google/genai": "0.21.0",
+    "xlsx": "0.18.5",
+    "papaparse": "5.4.1",
     "lz-string": "1.5.0"
   },
   "devDependencies": {

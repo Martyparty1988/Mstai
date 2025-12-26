@@ -1,146 +1,144 @@
-
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useI18n } from '../contexts/I18nContext';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../services/db';
-import PWAInstallPrompt from './PWAInstallPrompt';
 import TimeRecordForm from './TimeRecordForm';
 
 // Icons
-import WorkersIcon from './icons/WorkersIcon';
 import ProjectsIcon from './icons/ProjectsIcon';
 import ClockIcon from './icons/ClockIcon';
-import ChartBarIcon from './icons/ChartBarIcon';
 import MapIcon from './icons/MapIcon';
-import DocumentTextIcon from './icons/DocumentTextIcon';
 import CalendarIcon from './icons/CalendarIcon';
-import SettingsIcon from './icons/SettingsIcon';
+import PlusIcon from './icons/PlusIcon';
+import BrainIcon from './icons/BrainIcon';
+import ChartBarIcon from './icons/ChartBarIcon';
 
-interface StatCardProps {
-  label: string;
-  value: string | number;
-  icon: React.ReactNode;
-  link: string;
-}
-
-const StatCard: React.FC<StatCardProps> = ({ label, value, icon, link }) => (
-  <Link to={link} className="block p-6 glass-card rounded-3xl group hover:border-[var(--color-accent)]/30 transition-all relative overflow-hidden bg-white/[0.02]">
-    <div className="flex items-center justify-between relative z-10">
-      <div>
-        <h3 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-1">{label}</h3>
-        <p className="text-4xl font-bold text-white tracking-tight">{value}</p>
-      </div>
-      <div className="p-3 bg-white/5 rounded-2xl text-[var(--color-accent)] group-hover:bg-[var(--color-accent)] group-hover:text-white transition-all duration-300">
-        {icon}
-      </div>
+const ActionTile: React.FC<{ 
+  icon: React.ReactNode; 
+  label: string; 
+  onClick: () => void; 
+  color: string;
+  desc?: string;
+}> = ({ icon, label, onClick, color, desc }) => (
+  <button 
+    onClick={onClick}
+    className={`flex flex-col items-start p-6 rounded-[2.5rem] glass-card transition-all group hover:scale-[1.02] active:scale-95 border-l-8 ${color} shadow-2xl relative overflow-hidden h-full min-h-[160px]`}
+  >
+    <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+      {icon}
     </div>
-  </Link>
-);
-
-const NavCard: React.FC<{ to: string, icon: React.ReactNode, title: string, description: string }> = ({ to, icon, title, description }) => (
-    <Link to={to} className="flex flex-col p-6 rounded-3xl border border-white/5 bg-white/[0.02] hover:bg-white/[0.05] hover:border-white/10 transition-all group backdrop-blur-md">
-        <div className="mb-4 p-3 rounded-2xl w-fit transition-all bg-slate-800/50 text-slate-300 group-hover:bg-[var(--color-primary)] group-hover:text-white shadow-lg">
-            {icon}
-        </div>
-        <h3 className="text-lg font-bold text-white tracking-tight mb-1">{title}</h3>
-        <p className="text-slate-500 text-xs font-medium leading-relaxed line-clamp-2">{description}</p>
-    </Link>
+    <div className="mb-4 p-3 rounded-2xl bg-white/5 text-white group-hover:bg-white group-hover:text-black transition-all">
+      {icon}
+    </div>
+    <h3 className="text-xl font-black uppercase italic tracking-tighter text-white mb-1">{label}</h3>
+    {desc && <p className="text-xs text-slate-400 font-bold tracking-tight text-left">{desc}</p>}
+  </button>
 );
 
 const Dashboard: React.FC = () => {
   const { user } = useAuth();
   const { t } = useI18n();
+  const navigate = useNavigate();
   const [isLoggingWork, setIsLoggingWork] = useState(false);
 
-  const workersCount = useLiveQuery(() => db.workers.count(), [], 0) ?? 0;
   const activeProjectsCount = useLiveQuery(() => db.projects.where('status').equals('active').count(), [], 0) ?? 0;
   const activeSessions = useLiveQuery(() => db.attendanceSessions.toArray(), [], []);
-  const workers = useLiveQuery(() => db.workers.toArray(), [], []);
-  
-  const workerMap = React.useMemo(() => {
-      const map = new Map<number, string>();
-      workers.forEach(w => {
-          if (w.id !== undefined) map.set(w.id, w.name);
-      });
-      return map;
-  }, [workers]);
-
-  const mainNavs = [
-      { to: "/workers", icon: <WorkersIcon className="w-6 h-6" />, title: t('workers'), description: t('workers_desc'), roles: ['admin'] },
-      { to: "/projects", icon: <ProjectsIcon className="w-6 h-6" />, title: t('projects'), description: t('projects_desc'), roles: ['admin', 'user'] },
-      { to: "/records", icon: <ClockIcon className="w-6 h-6" />, title: t('work_log'), description: t('work_log_desc'), roles: ['admin', 'user'] },
-      { to: "/plan", icon: <MapIcon className="w-6 h-6" />, title: t('plan'), description: t('plan_desc'), roles: ['admin', 'user'] },
-      { to: "/reports", icon: <DocumentTextIcon className="w-6 h-6" />, title: t('reports'), description: t('reports_desc'), roles: ['admin', 'user'] },
-      { to: "/attendance", icon: <CalendarIcon className="w-6 h-6" />, title: t('attendance'), description: t('attendance_desc'), roles: ['admin', 'user'] },
-      { to: "/statistics", icon: <ChartBarIcon className="w-6 h-6" />, title: t('statistics'), description: t('statistics_desc'), roles: ['admin'] },
-      { to: "/settings", icon: <SettingsIcon className="w-6 h-6" />, title: t('settings'), description: t('settings_desc'), roles: ['admin', 'user'] },
-  ];
-
-  const visibleNavs = mainNavs.filter(nav => nav.roles.includes(user?.role || 'user'));
+  const workersCount = useLiveQuery(() => db.workers.count(), [], 0) ?? 0;
 
   return (
-    <div className="space-y-8 pb-8">
-      <header className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 pt-4">
-          <div className="animate-fade-in">
-            <h1 className="text-3xl md:text-5xl font-bold text-white tracking-tighter mb-2">
-               {user?.username ? `${t('welcome_admin').replace('Admin', user.username)}` : 'Dashboard'}
-            </h1>
-            <p className="text-sm md:text-base text-slate-400 font-medium max-w-xl">
-              {user?.role === 'admin' ? t('admin_dashboard_desc') : 'Central platform for solar installation management.'}
-            </p>
+    <div className="space-y-10 pb-32 animate-fade-in">
+      <header className="relative pt-8 px-2">
+        <h1 className="text-5xl md:text-7xl font-black text-white tracking-tighter italic leading-none mb-3">
+          MST<span className="text-[var(--color-accent)]">.</span>LAUNCHER
+        </h1>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 px-3 py-1 bg-green-500/20 rounded-full border border-green-500/30">
+            <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+            <span className="text-[10px] font-black uppercase tracking-widest text-green-400">ONLINE</span>
           </div>
-          <div className="flex gap-4 w-full md:w-auto">
-             <button onClick={() => setIsLoggingWork(true)} className="flex-1 md:flex-none px-6 py-3 bg-white text-black font-bold text-sm uppercase tracking-wide rounded-xl hover:bg-[var(--color-accent)] hover:text-white transition-all shadow-lg active:scale-95">
-                {t('log_work')}
-             </button>
-          </div>
+          <p className="text-slate-400 font-bold uppercase tracking-widest text-[10px]">
+            {user?.username} • Admin Panel Ready
+          </p>
+        </div>
       </header>
 
-      <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {user?.role === 'admin' && (
-            <>
-                <StatCard label={t('workers')} value={workersCount} icon={<WorkersIcon className="w-6 h-6" />} link="/workers" />
-                <StatCard label={t('active')} value={activeProjectsCount} icon={<ProjectsIcon className="w-6 h-6" />} link="/projects" />
-            </>
-        )}
-        
-        <div className={`${user?.role === 'admin' ? 'md:col-span-2' : 'col-span-full'} p-6 glass-card rounded-3xl relative overflow-hidden bg-gradient-to-br from-emerald-900/20 to-transparent border-emerald-500/10`}>
-            <div className="relative z-10 h-full flex flex-col justify-between">
-                <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-[11px] font-bold text-emerald-400 uppercase tracking-widest flex items-center gap-2">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                        Live Presence
-                    </h2>
-                    <Link to="/attendance" className="text-xs font-bold text-slate-400 hover:text-white transition-colors">View All →</Link>
-                </div>
-                
-                <div className="flex flex-wrap gap-2">
-                    {activeSessions.length > 0 ? activeSessions.map(session => (
-                        <div key={session.id} className="flex items-center gap-2 px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/20 rounded-lg">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-                            <span className="text-emerald-100 font-medium text-xs">{(session.workerId && workerMap.get(session.workerId)) || 'Worker'}</span>
-                        </div>
-                    )) : (
-                        <p className="text-slate-500 text-sm italic py-1">No active sessions.</p>
-                    )}
-                </div>
+      {/* Main Grid Actions */}
+      <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 px-2">
+        <ActionTile 
+          icon={<ClockIcon className="w-7 h-7" />} 
+          label={t('log_work')} 
+          desc="Zapsat hotové stoly a čas"
+          onClick={() => setIsLoggingWork(true)} 
+          color="border-indigo-500"
+        />
+        <ActionTile 
+          icon={<MapIcon className="w-7 h-7" />} 
+          label={t('plan')} 
+          desc="Interaktivní mapy a markery"
+          onClick={() => navigate('/plan')} 
+          color="border-cyan-500"
+        />
+        <ActionTile 
+          icon={<CalendarIcon className="w-7 h-7" />} 
+          label={t('attendance')} 
+          desc="Check-in / Check-out"
+          onClick={() => navigate('/attendance')} 
+          color="border-amber-500"
+        />
+        <ActionTile 
+          icon={<ProjectsIcon className="w-7 h-7" />} 
+          label={t('projects')} 
+          desc="Správa výstavby polí"
+          onClick={() => navigate('/projects')} 
+          color="border-emerald-500"
+        />
+      </section>
+
+      {/* Analytics Summary */}
+      <section className="grid grid-cols-1 lg:grid-cols-3 gap-8 px-2">
+        <div className="lg:col-span-2 glass-card rounded-[3rem] p-8 relative overflow-hidden group">
+          <div className="absolute top-0 right-0 p-8 opacity-[0.03] group-hover:opacity-10 transition-opacity">
+            <ChartBarIcon className="w-48 h-48" />
+          </div>
+          <h2 className="text-2xl font-black text-white uppercase tracking-tighter mb-8 italic flex items-center gap-3">
+            <ChartBarIcon className="w-6 h-6 text-[var(--color-accent)]" />
+            Aktuální Stav
+          </h2>
+          
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-8">
+            <div className="space-y-1">
+              <p className="text-5xl font-black text-white">{activeProjectsCount}</p>
+              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Aktivní Projekty</p>
             </div>
+            <div className="space-y-1">
+              <p className="text-5xl font-black text-[var(--color-accent)]">{workersCount}</p>
+              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Tým Pracovníků</p>
+            </div>
+             <div className="space-y-1 hidden md:block">
+              <p className="text-5xl font-black text-indigo-400">{activeSessions.length}</p>
+              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Právě na směně</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="glass-card rounded-[3rem] p-8 bg-indigo-950/20 border-indigo-500/20 flex flex-col cursor-pointer hover:bg-indigo-900/30 transition-all group" onClick={() => navigate('/import')}>
+          <div className="p-4 bg-indigo-600 rounded-3xl w-fit mb-6 shadow-[0_0_30px_rgba(79,70,229,0.4)] group-hover:scale-110 transition-transform">
+            <BrainIcon className="w-8 h-8 text-white" />
+          </div>
+          <h3 className="text-2xl font-black text-white uppercase italic tracking-tighter mb-2">AI Copilot</h3>
+          <p className="text-slate-400 text-sm font-bold leading-relaxed">
+            Nahrajte fotku nebo vložte text pro inteligentní analýzu dat.
+          </p>
+          <div className="mt-auto pt-6 text-[10px] font-black uppercase tracking-[0.2em] text-indigo-400 group-hover:text-white transition-colors">
+            Spustit Analýzu →
+          </div>
         </div>
       </section>
 
-      <div className="space-y-6">
-        <h2 className="text-xl font-bold text-white tracking-tight border-l-2 border-[var(--color-primary)] pl-4">Menu</h2>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-            {visibleNavs.map(nav => <NavCard key={nav.to} {...nav} />)}
-        </div>
-      </div>
-
-      <PWAInstallPrompt />
-
       {isLoggingWork && (
-          <TimeRecordForm onClose={() => setIsLoggingWork(false)} />
+        <TimeRecordForm onClose={() => setIsLoggingWork(false)} />
       )}
     </div>
   );
