@@ -47,6 +47,8 @@ const Dashboard: React.FC = () => {
   const activeSessions = useLiveQuery(() => db.attendanceSessions.toArray(), [], []);
   const workersCount = useLiveQuery(() => db.workers.count(), [], 0) ?? 0;
 
+  const activeSessionsCount = activeSessions?.length || 0;
+
   return (
     <div className="space-y-10 pb-32 animate-fade-in">
       <header className="relative pt-8 px-2">
@@ -116,8 +118,16 @@ const Dashboard: React.FC = () => {
               <p className="text-5xl font-black text-[var(--color-accent)]">{workersCount}</p>
               <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Tým Pracovníků</p>
             </div>
-             <div className="space-y-1 hidden md:block">
-              <p className="text-5xl font-black text-indigo-400">{activeSessions.length}</p>
+             <div className="space-y-1">
+              <div className="flex items-center gap-3">
+                  <p className="text-5xl font-black text-indigo-400">{activeSessionsCount}</p>
+                  {activeSessionsCount > 0 && (
+                    <span className="flex h-3 w-3 relative mt-2">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-3 w-3 bg-indigo-500"></span>
+                    </span>
+                  )}
+              </div>
               <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Právě na směně</p>
             </div>
           </div>

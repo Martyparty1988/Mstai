@@ -228,27 +228,32 @@ const ProjectCard: React.FC<{
                         </div>
                     </div>
                     
-                    {/* Tasks Progress */}
+                    {/* Tasks Progress Bar */}
                     <div className="space-y-2">
                         <div className="flex items-end justify-between px-1">
                             <span className="text-[10px] font-black uppercase tracking-widest text-slate-500" title={t('tasks')}>{t('tasks')}</span>
                             <div className="flex items-center gap-2">
                                 <span className="text-[10px] font-black bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded-full border border-indigo-500/30">
-                                    {stats.taskProgress}% {t('inner_completion_rate')}
+                                    {stats.taskProgress}%
                                 </span>
                                 <span className="font-mono text-xs font-bold text-white bg-white/5 px-2 py-0.5 rounded-lg border border-white/5">
                                     {stats.completedTasks}/{stats.totalTasks}
                                 </span>
                             </div>
                         </div>
-                        <div className="relative h-3 w-full overflow-hidden rounded-full bg-black/40 border border-white/5 shadow-inner">
+                        <div className="relative h-4 w-full overflow-hidden rounded-full bg-black/40 border border-white/5 shadow-inner group-hover:border-white/10 transition-colors">
                             <div 
-                                className="absolute left-0 top-0 h-full rounded-full bg-gradient-to-r from-violet-600 to-fuchsia-500 transition-all duration-1000 ease-out shadow-[0_0_15px_rgba(167,139,250,0.4)]" 
+                                className="absolute left-0 top-0 h-full rounded-full bg-gradient-to-r from-violet-600 via-purple-500 to-fuchsia-500 transition-all duration-1000 ease-out shadow-[0_0_20px_rgba(167,139,250,0.5)]" 
                                 style={{ width: `${stats.taskProgress}%` }}
                             >
                                 <div className="absolute inset-0 bg-[linear-gradient(90deg,transparent_0%,rgba(255,255,255,0.2)_50%,transparent_100%)] animate-[shimmer_2s_infinite]"></div>
                             </div>
                         </div>
+                        {stats.totalTasks === 0 && (
+                            <div className="text-[9px] text-slate-600 italic text-center w-full">
+                                {t('no_tasks_found')}
+                            </div>
+                        )}
                     </div>
                 </div>
 
